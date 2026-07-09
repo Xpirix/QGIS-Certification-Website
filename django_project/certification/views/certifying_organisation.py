@@ -5,6 +5,7 @@ from base.models import Project
 from braces.views import LoginRequiredMixin, UserPassesTestMixin
 from certification.mixins import ActiveCertifyingOrganisationRequiredMixin
 from certification.utilities import check_slug
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.sessions.models import Session
 from django.core.exceptions import ValidationError
@@ -833,7 +834,7 @@ class CertifyingOrganisationCreateView(
                     "------------------------------------------------------\n"
                     "This is an auto-generated email from the system."
                     " Please do not reply to this email.".format(**data),
-                    self.project.owner.email,
+                    settings.DEFAULT_FROM_EMAIL,
                     [recipient.email],
                     fail_silently=True,
                 )
@@ -868,7 +869,7 @@ class CertifyingOrganisationCreateView(
                     "contact us:\n"
                     "{contact_person}"
                     "\n\nSincerely,\n".format(**email_data),
-                    self.project.owner.email,
+                    settings.DEFAULT_FROM_EMAIL,
                     [applicant.email],
                     fail_silently=True,
                 )
@@ -1236,7 +1237,7 @@ def send_approved_email(certifying_organisation: CertifyingOrganisation, site: r
             "{site}/en/{project_slug}/about/\n\n"
             "Sincerely,\n"
             "{project_owner_firstname} {project_owner_lastname}".format(**data),
-            certifying_organisation.project.owner.email,
+            settings.DEFAULT_FROM_EMAIL,
             [organisation_owner.email],
             fail_silently=True,
         )
@@ -1271,7 +1272,7 @@ def send_pending_email(
             "{details_url}\n\n"
             "Sincerely,\n"
             "{project_owner_firstname} {project_owner_lastname}".format(**data),
-            certifying_organisation.project.owner.email,
+            settings.DEFAULT_FROM_EMAIL,
             [organisation_owner.email],
             fail_silently=True,
         )
@@ -1438,7 +1439,7 @@ def send_rejection_email(certifying_organisation, site, schema="http"):
             "{schema}://{site}/en/{project_slug}/about/\n\n"
             "Sincerely,\n"
             "{project_owner_firstname} {project_owner_lastname}".format(**data),
-            certifying_organisation.project.owner.email,
+            settings.DEFAULT_FROM_EMAIL,
             [organisation_owner.email],
             fail_silently=True,
         )
