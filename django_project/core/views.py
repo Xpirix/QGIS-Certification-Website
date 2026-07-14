@@ -15,6 +15,7 @@ from django.http import JsonResponse
 from django.contrib.auth.models import User
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
+from common.utilities import format_user_display
 
 
 def general_flatpage(request, url):
@@ -94,12 +95,22 @@ def index_view(request):
 class UserAutocomplete(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         query = request.GET.get("q", "").strip()
-        users = User.objects.filter(username__icontains=query)[:20]  # Limit results for performance
-        results = [{"value": user.pk, "display": f"{user.username} <{user.email}>"} for user in users]
+        # Match only on an exact (case-insensitive) username. Substring/name
+        # matching would let any logged-in user enumerate the directory, so a
+        # user can only be found by someone who already knows their username.
+        if not query:
+            return JsonResponse([], safe=False)
+        users = User.objects.filter(username__iexact=query)
+        results = [
+            {"value": user.pk, "display": format_user_display(user)}
+            for user in users
+        ]
         return JsonResponse(results, safe=False)
 
 
 class GetUserByPk(LoginRequiredMixin, View):
     def get(self, request, pk):
         user = get_object_or_404(User, pk=pk)
-        return JsonResponse({"value": user.pk, "display": f"{user.username} <{user.email}>"})
+        return JsonResponse(
+            {"value": user.pk, "display": format_user_display(user)}
+        )

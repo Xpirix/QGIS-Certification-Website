@@ -35,12 +35,39 @@ from .models import (
 from crispy_forms.layout import Submit
 from datetime import datetime
 
+from common.utilities import format_user_display
+
 from crispy_bulma.widgets import FileUploadInput
 
 FileUploadInput.template_name = 'widgets/file_upload_input.html'
 
 
-class MultiSelectWidget(forms.SelectMultiple):
+class SelectedOnlyMixin:
+    """Render only the currently-selected options.
+
+    The full user list must never be emitted into the page HTML, but the field
+    keeps its complete queryset so any valid pk still passes validation.
+    """
+
+    def optgroups(self, name, value, attrs=None):
+        selected = {str(v) for v in value if v not in (None, '')}
+        groups = []
+        for group, options, index in super().optgroups(name, value, attrs):
+            options = [o for o in options if str(o['value']) in selected]
+            if options:
+                groups.append((group, options, index))
+        return groups
+
+
+class MultiSelectWidget(SelectedOnlyMixin, forms.SelectMultiple):
+    template_name = 'widgets/multiselect.html'
+
+    def __init__(self, attrs=None):
+        attrs = {'multiple': True, **(attrs or {})}
+        super().__init__(attrs)
+
+
+class SingleUserSelectWidget(SelectedOnlyMixin, forms.Select):
     template_name = 'widgets/multiselect.html'
 
 
@@ -101,7 +128,8 @@ class CertifyingOrganisationForm(forms.ModelForm):
                 Field('vat_number', css_class='form-control'),
                 Field('logo', css_class='form-control'),
                 Field('owner_message', css_class='form-control'),
-                Field('organisation_owners', css_class='is-fullwidth'),
+                Field('organisation_owners',
+                      template='crispy/user_picker_field.html'),
                 Field('project', css_class='form-control'),
                 css_id='project-form')
         )
@@ -109,7 +137,7 @@ class CertifyingOrganisationForm(forms.ModelForm):
         self.helper.html5_required = False
         super(CertifyingOrganisationForm, self).__init__(*args, **kwargs)
         self.fields['organisation_owners'].label_from_instance = \
-            lambda obj: "%s <%s>" % (obj.get_full_name(), obj)
+            format_user_display
         self.fields['organisation_owners'].initial = [self.user]
         self.fields['project'].initial = self.project
         self.fields['project'].widget = forms.HiddenInput()
@@ -249,7 +277,11 @@ class CourseConvenerForm(forms.ModelForm):
     signature = forms.ImageField(widget=FileUploadInput)
     user = forms.ModelChoiceField(
         queryset=User.objects.order_by('username'),
-        widget=forms.Select)
+        widget=SingleUserSelectWidget(attrs={
+            'get_list_url': '/autocomplete/users/',
+            'get_item_url': '/get_user_by_pk/',
+            'color_style': 'is-success',
+        }))
 
     # noinspection PyClassicStyleClass.
     class Meta:
@@ -271,7 +303,7 @@ class CourseConvenerForm(forms.ModelForm):
             Fieldset(
                 form_title,
                 Field('title', css_class='form-control'),
-                Field('user', css_class='form-control chosen-select'),
+                Field('user', template='crispy/user_picker_field.html'),
                 Field('degree', css_class='form-control'),
                 Field('signature', css_class='form-control'),
                 Field('is_active', css_class='checkbox-primary'),
@@ -280,8 +312,7 @@ class CourseConvenerForm(forms.ModelForm):
         self.helper.layout = layout
         self.helper.html5_required = False
         super(CourseConvenerForm, self).__init__(*args, **kwargs)
-        self.fields['user'].label_from_instance = \
-            lambda obj: "%s < %s >" % (obj.get_full_name(), obj)
+        self.fields['user'].label_from_instance = format_user_display
         self.helper.layout.append(
             HTML(
                 '<button type="submit" class="button is-success mt-5" name="submit">'

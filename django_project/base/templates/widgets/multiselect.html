@@ -10,57 +10,66 @@
 <div class="is-hidden">
   {% include "django/forms/widgets/select.html" %}
 </div>
-<div class="control input is-block is-fullwidth" style="height: fit-content;">
-  <div id="selected-items" class="items mb-0"></div>
-  <input 
-    id="item-input" 
-    type="text" 
-    class="input p-0" 
-    style="border: none; box-shadow: none;"
-    placeholder="Type to search..." 
-  />
+<div class="control" style="position: relative;">
+  <div class="input is-block is-fullwidth" style="height: auto; min-height: 2.5em; display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem;">
+    <div id="selected-items-{{ widget.attrs.id }}" class="items selected-items mb-0" style="display: contents;"></div>
+    <input
+      id="item-input-{{ widget.attrs.id }}"
+      type="text"
+      class="p-0"
+      style="border: none; box-shadow: none; outline: none; flex: 1 1 auto; min-width: 8em; background: transparent;"
+      placeholder="Type the exact username…"
+    />
+  </div>
+  <div
+    id="item-suggestions-{{ widget.attrs.id }}"
+    class="dropdown-content is-hidden"
+    style="position: absolute; top: 100%; left: 0; right: 0; z-index: 30; max-height: 12em; overflow-y: auto;"
+  ></div>
 </div>
-<div class="control">
-  <div id="item-suggestions" class="dropdown-content is-hidden"></div>
-</div>
+<p class="help">Enter a user's exact username to find and select them.</p>
 
 <script type="text/javascript">
   $(document).ready(function () {
-    const hiddenInput = $('#{{ widget.attrs.id }}');
-    const itemInput = $('#item-input');
-    const suggestionBox = $('#item-suggestions');
-    const selectedItems = $('#selected-items');
+    const selectEl = $('#{{ widget.attrs.id }}');
+    const itemInput = $('#item-input-{{ widget.attrs.id }}');
+    const suggestionBox = $('#item-suggestions-{{ widget.attrs.id }}');
+    const selectedItems = $('#selected-items-{{ widget.attrs.id }}');
+    const isMultiple = {% if widget.attrs.multiple %}true{% else %}false{% endif %};
+    const getItemUrl = '{{ widget.attrs.get_item_url }}';
 
-    // Initialize selected items if hidden input has values
-    const initialItems = hiddenInput.val()
-    if (initialItems) {
-      initialItems.forEach(itemId => {
-        addItem(itemId);
-      });  
-    }
+    // Build the visible tags from the options the server rendered as selected.
+    // Only selected options are ever emitted, so this never leaks the full list.
+    selectEl.find('option:selected').each(function () {
+      const option = $(this);
+      if (!option.val()) return;
+      renderTag(option.val(), option.text());
+    });
+
     itemInput.on('input', function () {
-      const query = itemInput.val();
+      const query = itemInput.val().trim();
 
-      if (query.length > 1) {
+      if (query.length > 0) {
         $.ajax({
-          url: `{{ widget.attrs.get_list_url }}?q=${query}`,
+          url: `{{ widget.attrs.get_list_url }}?q=${encodeURIComponent(query)}`,
           method: 'GET',
           success: function (suggestions) {
-            // Clear previous suggestions
             suggestionBox.empty();
 
-            // Display new suggestions
             suggestions.forEach(suggestion => {
-              const itemElement = $('<a class="dropdown-item"></a>').addClass('dropdown-item').text(suggestion.display);
+              const itemElement = $('<a class="dropdown-item"></a>')
+                .addClass('dropdown-item')
+                .text(suggestion.display);
               itemElement.on('click', function () {
-                addItem(suggestion.value);
+                addItem(suggestion.value, suggestion.display);
               });
               suggestionBox.append(itemElement);
             });
 
-            // Add option to add new item if no suggestions match
             if (suggestions.length === 0) {
-              const addNewItemElement = $('<a class="dropdown-item"></a>').addClass('dropdown-item').text(`Username "${query}" not found.`);
+              const addNewItemElement = $('<a class="dropdown-item"></a>')
+                .addClass('dropdown-item')
+                .text(`Username "${query}" not found.`);
               suggestionBox.append(addNewItemElement);
             }
 
@@ -72,44 +81,63 @@
       }
     });
 
-    function addItem(itemId) {
-  
-      // Check if item already exists
-      if (selectedItems.children().toArray().some(item => $(item).attr('id').toString() === itemId.toString())) return;
+    function addItem(itemId, display) {
+      // Avoid duplicates.
+      if (selectEl.find(`option[value="${itemId}"]`).length) {
+        clearSuggestions();
+        return;
+      }
 
-      $.ajax({
-        url: `{{ widget.attrs.get_item_url }}${itemId}/`,
-        method: 'GET',
-        success: function (fetchedItem) {
-          // Add item to selected items
-          const itemEl = $('<span></span>')
-          .addClass('tag {{ widget.attrs.color_style }} m-1')
-          .text(fetchedItem.display)
-          .attr('id', fetchedItem.value);
-    
-          const deleteBtn = $('<button></button>').addClass('delete is-small');
-          deleteBtn.on('click', function () {
-            itemEl.remove();
-            updateHiddenInput();
-          });
-    
-          itemEl.append(deleteBtn);
-          selectedItems.append(itemEl);
-    
-          // Clear suggestions and input
-          suggestionBox.addClass('is-hidden');
-          itemInput.val('');
-    
-          // Update hidden input
-          updateHiddenInput();
-          
-        }
-      });
+      // Single-select replaces any current selection.
+      if (!isMultiple) {
+        selectEl.empty();
+        selectedItems.empty();
+      }
+
+      if (display) {
+        insertOption(itemId, display);
+        renderTag(itemId, display);
+        clearSuggestions();
+      } else if (getItemUrl) {
+        $.ajax({
+          url: `${getItemUrl}${itemId}/`,
+          method: 'GET',
+          success: function (fetchedItem) {
+            insertOption(fetchedItem.value, fetchedItem.display);
+            renderTag(fetchedItem.value, fetchedItem.display);
+            clearSuggestions();
+          }
+        });
+      }
     }
 
-    function updateHiddenInput() {
-      const items = selectedItems.children().toArray().map(item => Number($(item).attr('id')));
-      hiddenInput.val(items);
+    function insertOption(itemId, display) {
+      selectEl.append(
+        $('<option></option>').val(itemId).text(display).prop('selected', true)
+      );
+    }
+
+    function renderTag(itemId, display) {
+      const itemEl = $('<span></span>')
+        .addClass('tag {{ widget.attrs.color_style }} m-1')
+        .text(display)
+        .attr('data-value', itemId);
+
+      const deleteBtn = $('<button></button>')
+        .addClass('delete is-small')
+        .attr('type', 'button');
+      deleteBtn.on('click', function () {
+        selectEl.find(`option[value="${itemId}"]`).remove();
+        itemEl.remove();
+      });
+
+      itemEl.append(deleteBtn);
+      selectedItems.append(itemEl);
+    }
+
+    function clearSuggestions() {
+      suggestionBox.addClass('is-hidden');
+      itemInput.val('');
     }
   });
 </script>

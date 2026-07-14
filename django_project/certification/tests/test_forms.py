@@ -6,7 +6,9 @@ from certification.tests.model_factories import (
     CertifyingOrganisationF, StatusF
 )
 from core.model_factories import UserF
-from certification.forms import CertifyingOrganisationForm
+from certification.forms import (
+    CertifyingOrganisationForm, CourseConvenerForm
+)
 
 
 class TestCertifyingOrganisationForm(TestCase):
@@ -79,3 +81,31 @@ class TestCertifyingOrganisationForm(TestCase):
             certifying_organisation.status,
             None
         )
+
+
+class TestUserPickerWidgets(TestCase):
+    """The user pickers must not dump the whole user directory into HTML."""
+
+    def setUp(self):
+        self.owner = UserF.create(username='owner')
+        self.other = UserF.create(username='stranger')
+        self.project = ProjectF.create()
+        self.certifying_organisation = CertifyingOrganisationF.create(
+            project=self.project)
+
+    def test_owner_widget_only_renders_selected_user(self):
+        form = CertifyingOrganisationForm(
+            user=self.owner, project=self.project)
+        html = str(form['organisation_owners'])
+        # The creating user is pre-selected and should appear...
+        self.assertIn('owner', html)
+        # ...but an unrelated user must not be dumped into the options.
+        self.assertNotIn('stranger', html)
+
+    def test_convener_widget_renders_no_users_by_default(self):
+        form = CourseConvenerForm(
+            user=self.owner,
+            certifying_organisation=self.certifying_organisation)
+        html = str(form['user'])
+        self.assertNotIn('owner', html)
+        self.assertNotIn('stranger', html)
