@@ -1,7 +1,8 @@
 # coding=utf-8
 import logging
 
-from certification.forms import MultiSelectWidget
+from certification.forms import MultiSelectWidget, SingleUserSelectWidget
+from common.utilities import format_user_display
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import (
     Field,
@@ -53,6 +54,7 @@ class ProjectForm(forms.ModelForm):
         widget=MultiSelectWidget(
             attrs={
                 "get_list_url": "/autocomplete/users/",
+                "get_item_url": "/get_user_by_pk/",
                 "color_style": "is-success",
             }
         ),
@@ -61,6 +63,22 @@ class ProjectForm(forms.ModelForm):
             "Managers of the certification app in this project. "
             "They will receive email notification about organisation and have"
             " the same permissions as project owner in the certification app."
+        ),
+    )
+
+    project_representative = forms.ModelChoiceField(
+        queryset=User.objects.order_by("username"),
+        widget=SingleUserSelectWidget(
+            attrs={
+                "get_list_url": "/autocomplete/users/",
+                "get_item_url": "/get_user_by_pk/",
+                "color_style": "is-success",
+            }
+        ),
+        required=False,
+        help_text=_(
+            "Project representative. "
+            "This name will be used on invoices and certificates. "
         ),
     )
 
@@ -103,9 +121,11 @@ class ProjectForm(forms.ModelForm):
                 Field("project_url", css_class="form-control"),
                 Field("project_repository_url", css_class="form-control"),
                 Field("precis", css_class="form-control"),
-                Field("project_representative", css_class="chosen-select"),
+                Field("project_representative",
+                      template="crispy/user_picker_field.html"),
                 Field("project_representative_signature", css_class="form-control"),
-                Field("certification_managers", css_class="form-control"),
+                Field("certification_managers",
+                      template="crispy/user_picker_field.html"),
                 Field("credit_cost", css_class="form-control"),
                 Field("certificate_credit", css_class="form-control"),
                 Field("gitter_room", css_class="form-control"),
@@ -121,10 +141,10 @@ class ProjectForm(forms.ModelForm):
         self.helper.html5_required = False
         super(ProjectForm, self).__init__(*args, **kwargs)
         self.fields["certification_managers"].label_from_instance = (
-            lambda obj: "%s <%s>" % (obj.get_full_name(), obj)
+            format_user_display
         )
         self.fields["project_representative"].label_from_instance = (
-            lambda obj: "%s <%s>" % (obj.get_full_name(), obj)
+            format_user_display
         )
         # self.helper.add_input(Submit('submit', 'Submit', css_class='button is-success pt-2 mt-5'))
         self.fields["is_certification"].label = "Enable Certification"
