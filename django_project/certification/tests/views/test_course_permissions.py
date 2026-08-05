@@ -3,6 +3,7 @@
 protect courses and course types from cascading deletions."""
 
 import logging
+from datetime import date, timedelta
 
 from certification.models import Certificate, Course, CourseType
 from certification.tests.model_factories import (
@@ -273,6 +274,57 @@ class TestCourseDeleteGuard(CoursePermissionTestBase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(Course.objects.filter(pk=self.course.pk).exists())
+
+    def issue_certificate(self, issued_days_ago: int) -> Certificate:
+        """Attach a certificate with a back-dated issue date.
+
+        issue_date is auto_now_add, so it has to be written with update().
+        """
+
+        certificate = CertificateF.create(
+            course=self.course,
+            attendee=AttendeeF.create(
+                certifying_organisation=self.certifying_organisation),
+            certificate_type=CertificateTypeF.create(),
+        )
+        Certificate.objects.filter(pk=certificate.pk).update(
+            issue_date=date.today() - timedelta(days=issued_days_ago))
+        return certificate
+
+    def test_message_says_never_when_a_certificate_is_permanent(self) -> None:
+        """Past the window there is no sequence of steps that frees the course."""
+
+        self.issue_certificate(issued_days_ago=90)
+
+        self.login('staff')
+        response = self.client.get(self.course_delete_url())
+
+        self.assertContains(response, 'This course cannot be deleted.')
+        self.assertContains(response, 'can no longer be revoked')
+        self.assertNotContains(response, 'cannot be deleted yet')
+
+    def test_message_says_not_yet_when_all_certificates_are_revocable(
+            self) -> None:
+        self.issue_certificate(issued_days_ago=1)
+
+        self.login('staff')
+        response = self.client.get(self.course_delete_url())
+
+        self.assertContains(response, 'This course cannot be deleted yet.')
+        self.assertContains(response, 'can still be revoked')
+        self.assertNotContains(response, 'permanent record')
+
+    def test_one_permanent_certificate_is_enough_to_block_forever(self) -> None:
+        """A mix of revocable and permanent still means permanent."""
+
+        self.issue_certificate(issued_days_ago=1)
+        self.issue_certificate(issued_days_ago=90)
+
+        self.login('staff')
+        response = self.client.get(self.course_delete_url())
+
+        self.assertContains(response, 'This course cannot be deleted.')
+        self.assertNotContains(response, 'cannot be deleted yet')
 
     def test_delete_succeeds_when_course_has_no_children(self) -> None:
         self.login('staff')

@@ -12,6 +12,7 @@ from django.db import IntegrityError
 from django.db.models import QuerySet
 from django.http import Http404, HttpResponseRedirect
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 
 from ..forms import CourseForm
@@ -308,6 +309,48 @@ class CourseDeleteView(
                  attendee_count)
             )
         return blocking_children
+
+    def get_permanent_certificate_count(self) -> int:
+        """Count certificates that are past their revocation window.
+
+        These can no longer be revoked, so unlike the other blockers there is
+        no sequence of steps that would let the course be deleted: it holds a
+        permanent record.
+
+        :returns: How many of this course's certificates are permanent.
+        :rtype: int
+        """
+
+        return sum(
+            1
+            for certificate in self.object.certificate_set.all()
+            if not certificate.is_revocable
+        )
+
+    def get_context_data(self, **kwargs):
+        """Tell the template which of the two situations applies."""
+
+        context = super(CourseDeleteView, self).get_context_data(**kwargs)
+        if getattr(self, "object", None) is not None:
+            context["permanent_certificate_count"] = (
+                self.get_permanent_certificate_count()
+            )
+        return context
+
+    def get_blocked_message(
+        self, blocking_children: list[tuple[str, int]]
+    ) -> str:
+        """Distinguish "not yet" from "not ever"."""
+
+        permanent_count = self.get_permanent_certificate_count()
+        if permanent_count:
+            return _(
+                "This course cannot be deleted. It holds %(count)s "
+                "certificate(s) that can no longer be revoked, so it is kept "
+                "as a permanent record."
+            ) % {"count": permanent_count}
+        return super(CourseDeleteView, self).get_blocked_message(
+            blocking_children)
 
     def get(self, request, *args, **kwargs):
         """Get the organisation_slug from the URL
