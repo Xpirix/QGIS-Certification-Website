@@ -310,30 +310,13 @@ class CourseDeleteView(
             )
         return blocking_children
 
-    def get_permanent_certificate_count(self) -> int:
-        """Count certificates that are past their revocation window.
-
-        These can no longer be revoked, so unlike the other blockers there is
-        no sequence of steps that would let the course be deleted: it holds a
-        permanent record.
-
-        :returns: How many of this course's certificates are permanent.
-        :rtype: int
-        """
-
-        return sum(
-            1
-            for certificate in self.object.certificate_set.all()
-            if not certificate.is_revocable
-        )
-
     def get_context_data(self, **kwargs):
         """Tell the template which of the two situations applies."""
 
         context = super(CourseDeleteView, self).get_context_data(**kwargs)
         if getattr(self, "object", None) is not None:
             context["permanent_certificate_count"] = (
-                self.get_permanent_certificate_count()
+                self.object.permanent_certificate_count
             )
         return context
 
@@ -342,7 +325,7 @@ class CourseDeleteView(
     ) -> str:
         """Distinguish "not yet" from "not ever"."""
 
-        permanent_count = self.get_permanent_certificate_count()
+        permanent_count = self.object.permanent_certificate_count
         if permanent_count:
             return _(
                 "This course cannot be deleted. It holds %(count)s "

@@ -231,6 +231,50 @@ class TestCourseTypeDeleteGuard(CoursePermissionTestBase):
 
         self.assertEqual(Certificate.objects.count(), certificates_before)
 
+    def issue_certificate_on_course(self, issued_days_ago: int) -> None:
+        """Attach a back-dated certificate to this course type's course."""
+
+        certificate = CertificateF.create(
+            course=self.course,
+            attendee=AttendeeF.create(
+                certifying_organisation=self.certifying_organisation),
+            certificate_type=CertificateTypeF.create(),
+        )
+        Certificate.objects.filter(pk=certificate.pk).update(
+            issue_date=date.today() - timedelta(days=issued_days_ago))
+
+    def test_message_says_never_when_a_course_is_permanent(self) -> None:
+        """Surfaced here so the user does not walk each course to find out."""
+
+        self.issue_certificate_on_course(issued_days_ago=90)
+
+        self.login('staff')
+        response = self.client.get(self.coursetype_delete_url())
+
+        self.assertContains(response, 'This course type cannot be deleted.')
+        self.assertContains(response, 'can no longer be revoked')
+        self.assertNotContains(response, 'cannot be deleted yet')
+
+    def test_message_says_not_yet_when_courses_are_still_removable(
+            self) -> None:
+        self.issue_certificate_on_course(issued_days_ago=1)
+
+        self.login('staff')
+        response = self.client.get(self.coursetype_delete_url())
+
+        self.assertContains(
+            response, 'This course type cannot be deleted yet.')
+        self.assertContains(response, 'can still be revoked')
+        self.assertNotContains(response, 'permanent record')
+
+    def test_message_says_not_yet_when_course_has_no_certificates(
+            self) -> None:
+        self.login('staff')
+        response = self.client.get(self.coursetype_delete_url())
+
+        self.assertContains(
+            response, 'This course type cannot be deleted yet.')
+
     def test_delete_succeeds_once_courses_are_removed(self) -> None:
         """The guard defers deletion, it does not forbid it forever."""
 

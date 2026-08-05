@@ -145,3 +145,24 @@ class Course(models.Model):
             return False
         else:
             return True
+
+    @property
+    def permanent_certificate_count(self) -> int:
+        """Certificates on this course that can no longer be revoked.
+
+        While this is above zero the course holds a permanent record and can
+        never be deleted, however many other children are removed first.
+
+        Iterates rather than filtering in SQL so that the window stays
+        defined in one place, Certificate.is_revocable. Callers dealing with
+        many courses should prefetch_related('certificate_set').
+
+        :returns: Number of certificates past their revocation window.
+        :rtype: int
+        """
+
+        return sum(
+            1
+            for certificate in self.certificate_set.all()
+            if not certificate.is_revocable
+        )

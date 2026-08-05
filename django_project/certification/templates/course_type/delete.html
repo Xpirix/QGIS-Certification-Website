@@ -12,7 +12,19 @@
 
 {% block content %}
     <form action="" id="delete-confirmation" method="post" class="box-content">{% csrf_token %}
-        {% if blocking_children %}
+        {% if blocked_course_count %}
+            <div class="notification is-danger is-light">
+                <p><strong>This course type cannot be deleted.</strong></p>
+                <p>
+                    {{ blocked_course_count }} of its course{{ blocked_course_count|pluralize }}
+                    hold{{ blocked_course_count|pluralize:"s," }} certificates
+                    that can no longer be revoked, because the 7 day
+                    revocation window has closed. Those courses are a
+                    permanent record and cannot be deleted, so neither can
+                    this course type.
+                </p>
+            </div>
+        {% elif blocking_children %}
             <div class="notification is-danger is-light">
                 <p><strong>This course type cannot be deleted yet.</strong></p>
                 <p>It is still used by:</p>
@@ -22,9 +34,8 @@
                     {% endfor %}
                 </ul>
                 <p>
-                    Deleting it would also delete those courses and every
-                    certificate issued for them. Please delete each course
-                    first, then return here.
+                    Every certificate on those courses can still be revoked,
+                    so you can delete each course first and then return here.
                 </p>
             </div>
         {% else %}

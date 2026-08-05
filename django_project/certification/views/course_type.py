@@ -11,6 +11,7 @@ from django.db import IntegrityError
 from django.db.models import QuerySet
 from django.http import Http404
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 
 from ..forms import CourseTypeForm
@@ -117,6 +118,46 @@ class CourseTypeDeleteView(
             return []
         label = "course" if course_count == 1 else "courses"
         return [(label, course_count)]
+
+    def get_blocked_course_count(self) -> int:
+        """Count courses under this type that can never be deleted.
+
+        A course holding a certificate past its revocation window is
+        permanent, and so is this course type: no amount of tidying up the
+        other courses would free it. Surfacing that here saves the user
+        working through each course only to hit a dead end.
+
+        :returns: Number of courses holding a permanent certificate.
+        :rtype: int
+        """
+
+        courses = self.object.course_set.prefetch_related("certificate_set")
+        return sum(
+            1 for course in courses if course.permanent_certificate_count
+        )
+
+    def get_context_data(self, **kwargs):
+        """Tell the template which of the two situations applies."""
+
+        context = super(CourseTypeDeleteView, self).get_context_data(**kwargs)
+        if getattr(self, "object", None) is not None:
+            context["blocked_course_count"] = self.get_blocked_course_count()
+        return context
+
+    def get_blocked_message(
+        self, blocking_children: list[tuple[str, int]]
+    ) -> str:
+        """Distinguish "not yet" from "not ever"."""
+
+        blocked_courses = self.get_blocked_course_count()
+        if blocked_courses:
+            return _(
+                "This course type cannot be deleted. %(count)s of its courses "
+                "hold certificates that can no longer be revoked, so they are "
+                "kept as a permanent record."
+            ) % {"count": blocked_courses}
+        return super(CourseTypeDeleteView, self).get_blocked_message(
+            blocking_children)
 
     def get(self, request, *args, **kwargs):
         """
