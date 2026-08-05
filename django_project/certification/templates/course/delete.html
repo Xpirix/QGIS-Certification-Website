@@ -12,9 +12,26 @@
 
 {% block content %}
     <form action="" id="delete-confirmation" method="post" class="box-content">{% csrf_token %}
-        <div class="notification is-danger is-light">
-            <p>Are you sure you want to delete the course below?</p>
-        </div>
+        {% if blocking_children %}
+            <div class="notification is-danger is-light">
+                <p><strong>This course cannot be deleted yet.</strong></p>
+                <p>It still has:</p>
+                <ul>
+                    {% for label, count in blocking_children %}
+                        <li>{{ count }} {{ label }}</li>
+                    {% endfor %}
+                </ul>
+                <p>
+                    Deleting it would also delete those records, including any
+                    certificates already issued. Please remove them first, then
+                    return here.
+                </p>
+            </div>
+        {% else %}
+            <div class="notification is-danger is-light">
+                <p>Are you sure you want to delete the course below?</p>
+            </div>
+        {% endif %}
         <div>
             <h3 class="title is-4">Course: {{ course.name }}</h3>
             <div class="columns">
@@ -29,6 +46,7 @@
             </div>
         </div>
         <div class="buttons is-right">
+            {% if not blocking_children %}
             <a class="button is-danger"
                href="#"
                onClick="document.getElementById('delete-confirmation').submit()"
@@ -38,6 +56,7 @@
                 </span>
                 <span>Delete</span>
             </a>
+            {% endif %}
             <a class="button is-light"
                href='{% url "certifyingorganisation-detail" slug=course.certifying_organisation.slug %}'
                title="Cancel">

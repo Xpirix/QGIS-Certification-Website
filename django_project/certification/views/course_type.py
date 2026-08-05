@@ -1,9 +1,14 @@
 # coding=utf-8
 from base.models import Project
 from braces.views import LoginRequiredMixin
-from certification.mixins import ActiveCertifyingOrganisationRequiredMixin
+from certification.mixins import (
+    ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
+    ProtectChildrenDeleteMixin,
+)
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.db.models import QuerySet
 from django.http import Http404
 from django.urls import reverse
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
@@ -22,6 +27,7 @@ class CourseTypeMixin(object):
 class CourseTypeCreateView(
     LoginRequiredMixin,
     ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
     CourseTypeMixin,
     CreateView,
 ):
@@ -86,13 +92,31 @@ class CourseTypeCreateView(
 
 
 class CourseTypeDeleteView(
-    LoginRequiredMixin, ActiveCertifyingOrganisationRequiredMixin, DeleteView
+    LoginRequiredMixin,
+    ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
+    ProtectChildrenDeleteMixin,
+    DeleteView,
 ):
     """Delete view for Course Type."""
 
     model = CourseType
     context_object_name = "coursetype"
     template_name = "course_type/delete.html"
+
+    def get_blocking_children(self) -> list[tuple[str, int]]:
+        """Courses cascade from a course type, taking their certificates and
+        attendees with them, so a course type with any course is protected.
+
+        :returns: (label, count) for the courses still using this type.
+        :rtype: list
+        """
+
+        course_count = self.object.course_set.count()
+        if not course_count:
+            return []
+        label = "course" if course_count == 1 else "courses"
+        return [(label, course_count)]
 
     def get(self, request, *args, **kwargs):
         """
@@ -173,6 +197,7 @@ class CourseTypeDeleteView(
 class CourseTypeUpdateView(
     LoginRequiredMixin,
     ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
     CourseTypeMixin,
     UpdateView,
 ):
@@ -220,14 +245,19 @@ class CourseTypeUpdateView(
         )
         return context
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[CourseType]:
         """Get the queryset for this view.
 
-        :returns: query set that is all Course Type objects
+        Scoped to the organisation in the URL so a course type cannot be
+        edited through another organisation's address.
+
+        :returns: Course Type queryset filtered by Certifying Organisation
         :rtype: QuerySet
         """
 
-        qs = CourseType.objects.all()
+        qs = CourseType.objects.filter(
+            certifying_organisation=self.certifying_organisation
+        )
         return qs
 
     def get_success_url(self):
