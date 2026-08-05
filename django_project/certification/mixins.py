@@ -2,6 +2,7 @@ from certification.models import CertifyingOrganisation, Course, CourseConvener
 from django.contrib import messages
 from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.exceptions import PermissionDenied
+from django.db.models import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
 
@@ -135,7 +136,9 @@ class CourseEditPermissionMixin(OrganisationEditPermissionMixin):
         if not user.is_authenticated:
             return False
 
-        course_slug = self.kwargs.get("slug")
+        # Course URLs name the course "slug"; URLs for things hanging off a
+        # course, such as its attendees, name it "course_slug".
+        course_slug = self.kwargs.get("slug") or self.kwargs.get("course_slug")
         if course_slug is None:
             # Creating: any convener of this organisation may add a course.
             return CourseConvener.objects.filter(
@@ -149,6 +152,42 @@ class CourseEditPermissionMixin(OrganisationEditPermissionMixin):
             slug=course_slug,
             course_convener__user=user,
         ).exists()
+
+
+class ProtectedErrorMessageMixin:
+    """Turn a ProtectedError into a readable page instead of a 500.
+
+    The on_delete=PROTECT rules are the real guarantee, and they are reached
+    by paths with no child-specific guard of their own. Without this the user
+    would get an unhandled server error rather than being told what is in the
+    way.
+    """
+
+    def get_protected_message(self, error: ProtectedError) -> str:
+        """Explain which kinds of record are holding the deletion up."""
+
+        models_blocking = sorted(
+            {obj._meta.verbose_name for obj in error.protected_objects}
+        )
+        return _(
+            "This %(object)s cannot be deleted because other records still "
+            "depend on it (%(models)s). Please remove those first."
+        ) % {
+            "object": self.model._meta.verbose_name,
+            "models": ", ".join(models_blocking),
+        }
+
+    def post(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        try:
+            return super().post(request, *args, **kwargs)
+        except ProtectedError as error:
+            messages.error(request, self.get_protected_message(error))
+            self.object = self.get_object()
+            return self.render_to_response(
+                self.get_context_data(object=self.object)
+            )
 
 
 class ProtectChildrenDeleteMixin:

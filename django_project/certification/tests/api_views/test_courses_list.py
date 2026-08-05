@@ -77,10 +77,11 @@ class TestCourseApiView(TestCase):
         :return:
         """
 
-        self.course.delete()
-        self.certifying_organisation.delete()
-        self.project.delete()
-        self.user.delete()
+        # Nothing to do: TestCase wraps each test in a transaction and rolls
+        # it back, so tearing the fixtures down by hand is redundant. It also
+        # cannot work now that the relations are PROTECTed, since it deleted
+        # parents before their children.
+        pass
 
     @override_settings(
         VALID_DOMAIN=[

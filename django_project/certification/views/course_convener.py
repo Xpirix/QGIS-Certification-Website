@@ -1,6 +1,10 @@
 # coding=utf-8
 from braces.views import LoginRequiredMixin
-from certification.mixins import ActiveCertifyingOrganisationRequiredMixin
+from certification.mixins import (
+    ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
+    ProtectedErrorMessageMixin,
+)
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import Http404, HttpResponseRedirect
@@ -21,6 +25,7 @@ class CourseConvenerMixin(object):
 class CourseConvenerCreateView(
     LoginRequiredMixin,
     ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
     CourseConvenerMixin,
     CreateView,
 ):
@@ -99,7 +104,11 @@ class CourseConvenerCreateView(
 
 
 class CourseConvenerDeleteView(
-    LoginRequiredMixin, ActiveCertifyingOrganisationRequiredMixin, DeleteView
+    LoginRequiredMixin,
+    ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
+    ProtectedErrorMessageMixin,
+    DeleteView,
 ):
     """Delete view for Course Convener."""
 
@@ -186,6 +195,7 @@ class CourseConvenerDeleteView(
 class CourseConvenerUpdateView(
     LoginRequiredMixin,
     ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
     CourseConvenerMixin,
     UpdateView,
 ):

@@ -53,9 +53,9 @@ class TestCertificationChecklist(TestCase):
 
         :return:
         """
-        self.project.delete()
-        Checklist.objects.all().delete()
-        self.user.delete()
+        # Redundant under TestCase's transaction rollback, and impossible now
+        # that the relations are PROTECTed: it deleted parents before children.
+        pass
 
     @override_settings(VALID_DOMAIN=['testserver', ])
     def test_non_manager_activate_checklist(self):

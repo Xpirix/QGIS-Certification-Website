@@ -59,9 +59,9 @@ class CertificateCheckoutTest(TestCase):
 
         :return:
         """
-        self.project.delete()
-        self.certifying_organisation.delete()
-        self.user.delete()
+        # Fixture deletion removed: redundant under TestCase's transaction
+        # rollback, and impossible now that the relations are PROTECTed, since
+        # it deleted parents before their children.
         Customer.objects.raw(
             "DELETE FROM djstripe_customer WHERE "
             "djstripe_customer.id = '{}'".format(

@@ -78,17 +78,20 @@ class Course(models.Model):
         blank=True
     )
 
+    # PROTECT throughout: each of these used to cascade, so deleting any one
+    # of them silently destroyed the course and every certificate issued for
+    # it. A parent can only go once its courses have been dealt with.
     course_convener = models.ForeignKey(CourseConvener,
-                                        on_delete=models.CASCADE)
+                                        on_delete=models.PROTECT)
     course_type = models.ForeignKey(CourseType,
-                                    on_delete=models.CASCADE)
+                                    on_delete=models.PROTECT)
     training_center = models.ForeignKey(TrainingCenter,
-                                        on_delete=models.CASCADE)
+                                        on_delete=models.PROTECT)
     certifying_organisation = models.ForeignKey(CertifyingOrganisation,
-                                                on_delete=models.CASCADE)
+                                                on_delete=models.PROTECT)
     certificate_type = models.ForeignKey(
         CertificateType, on_delete=models.PROTECT, null=True)
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    author = models.ForeignKey(User, on_delete=models.PROTECT)
     objects = models.Manager()
 
     class Meta:

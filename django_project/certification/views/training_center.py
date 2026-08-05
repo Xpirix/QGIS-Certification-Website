@@ -1,7 +1,11 @@
 # coding=utf-8
 from base.models import Project
 from braces.views import LoginRequiredMixin
-from certification.mixins import ActiveCertifyingOrganisationRequiredMixin
+from certification.mixins import (
+    ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
+    ProtectedErrorMessageMixin,
+)
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import Http404, HttpResponseRedirect
@@ -23,6 +27,7 @@ class TrainingCenterMixin(object):
 class TrainingCenterCreateView(
     LoginRequiredMixin,
     ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
     TrainingCenterMixin,
     CreateView,
 ):
@@ -175,7 +180,11 @@ class TrainingCenterDetailView(
 
 
 class TrainingCenterDeleteView(
-    LoginRequiredMixin, ActiveCertifyingOrganisationRequiredMixin, DeleteView
+    LoginRequiredMixin,
+    ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
+    ProtectedErrorMessageMixin,
+    DeleteView,
 ):
     """Delete view for Training Center."""
 
@@ -269,6 +278,7 @@ class TrainingCenterDeleteView(
 class TrainingCenterUpdateView(
     LoginRequiredMixin,
     ActiveCertifyingOrganisationRequiredMixin,
+    OrganisationEditPermissionMixin,
     TrainingCenterMixin,
     UpdateView,
 ):

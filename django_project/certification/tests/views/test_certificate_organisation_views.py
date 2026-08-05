@@ -98,15 +98,9 @@ class TestCertificateOrganisationView(TestCase):
 
         :return:
         """
-        self.certificate.delete()
-        self.attendee.delete()
-        self.course.delete()
-        self.training_center.delete()
-        self.course_type.delete()
-        self.course_convener.delete()
-        self.certifying_organisation.delete()
-        self.project.delete()
-        self.user.delete()
+        # Redundant under TestCase's transaction rollback, and impossible now
+        # that the relations are PROTECTed: it deleted parents before children.
+        pass
 
     @override_settings(VALID_DOMAIN=['testserver', ])
     def test_CertificateOrganisationCreateView_get(self):

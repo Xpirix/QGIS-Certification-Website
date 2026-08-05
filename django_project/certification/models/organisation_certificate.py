@@ -57,9 +57,9 @@ class CertifyingOrganisationCertificate(models.Model):
         default=True
     )
 
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    author = models.ForeignKey(User, on_delete=models.PROTECT)
     certifying_organisation = models.ForeignKey(CertifyingOrganisation,
-                                                on_delete=models.CASCADE)
+                                                on_delete=models.PROTECT)
     history = HistoricalRecords()
 
     class Meta:

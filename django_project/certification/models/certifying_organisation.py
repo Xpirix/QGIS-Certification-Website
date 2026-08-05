@@ -208,7 +208,7 @@ class CertifyingOrganisation(models.Model):
 
     slug = models.SlugField()
     organisation_owners = models.ManyToManyField(User)
-    project = models.ForeignKey('base.Project', on_delete=models.CASCADE)
+    project = models.ForeignKey('base.Project', on_delete=models.PROTECT)
     objects = models.Manager()
     approved_objects = ApprovedCertifyingOrganisationManager()
     unapproved_objects = UnapprovedCertifyingOrganisationManager()

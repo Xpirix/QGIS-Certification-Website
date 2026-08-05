@@ -71,7 +71,7 @@ class Attendee(models.Model):
     certifying_organisation = \
         models.ForeignKey(CertifyingOrganisation, null=True,
                           on_delete=models.SET_NULL)
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    author = models.ForeignKey(User, on_delete=models.PROTECT)
     objects = models.Manager()
 
     # noinspection PyClassicStyleClass.

@@ -25,9 +25,9 @@ class CourseConvener(models.Model):
         default=''
     )
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.PROTECT)
     certifying_organisation = models.ForeignKey(CertifyingOrganisation,
-                                                on_delete=models.CASCADE)
+                                                on_delete=models.PROTECT)
     objects = models.Manager()
 
     signature = models.ImageField(
