@@ -12,9 +12,10 @@ from certification.models.attendee import Attendee
 class CourseAttendee(models.Model):
     """One person who attends course is defined here."""
 
-    attendee = models.ForeignKey(Attendee, on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    # Enrolments are removed explicitly, never as a side effect.
+    attendee = models.ForeignKey(Attendee, on_delete=models.PROTECT)
+    course = models.ForeignKey(Course, on_delete=models.PROTECT)
+    author = models.ForeignKey(User, on_delete=models.PROTECT)
     objects = models.Manager()
 
     class Meta:

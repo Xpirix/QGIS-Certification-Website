@@ -57,8 +57,8 @@ class TrainingCenter(SlugifyingMixin, models.Model):
 
     slug = models.SlugField()
     certifying_organisation = models.ForeignKey(CertifyingOrganisation,
-                                                on_delete=models.CASCADE)
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
+                                                on_delete=models.PROTECT)
+    author = models.ForeignKey(User, on_delete=models.PROTECT)
     objects = models.Manager()
 
     # noinspection PyClassicStyleClass.

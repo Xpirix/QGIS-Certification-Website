@@ -111,13 +111,9 @@ class TestCourseAttendeeView(TestCase):
 
         :return:
         """
-        self.project.delete()
-        self.certifying_organisation.delete()
-        self.training_center.delete()
-        self.course_convener.delete()
-        self.course_type.delete()
-        self.course.delete()
-        self.user.delete()
+        # Redundant under TestCase's transaction rollback, and impossible now
+        # that the relations are PROTECTed: it deleted parents before children.
+        pass
 
     @override_settings(VALID_DOMAIN=['testserver', ])
     def test_AttendeeCreateView_no_login(self):

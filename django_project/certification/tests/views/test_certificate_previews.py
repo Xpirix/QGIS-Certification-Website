@@ -65,11 +65,9 @@ class TestCertificatePreview(TestCase):
 
         :return:
         """
-        self.test_project.delete()
-        self.convener.delete()
-        self.training_center.delete()
-        self.course_type.delete()
-        self.user.delete()
+        # Redundant under TestCase's transaction rollback, and impossible now
+        # that the relations are PROTECTed: it deleted parents before children.
+        pass
 
     @override_settings(VALID_DOMAIN=['testserver', ])
     def test_preview_certificate_no_data_posted_no_login(self):

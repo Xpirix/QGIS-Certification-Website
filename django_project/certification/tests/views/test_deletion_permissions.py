@@ -9,6 +9,7 @@ cascades to their courses and every certificate issued for them.
 import logging
 
 from certification.models import (
+    CertifyingOrganisation,
     CourseAttendee,
     CourseConvener,
     TrainingCenter,
@@ -137,6 +138,22 @@ class TestCourseConvenerPermissions(DeletionPermissionTestBase):
         self.login('owner')
         response = self.client.get(self.convener_delete_url())
         self.assertEqual(response.status_code, 200)
+
+
+class TestOrganisationDeleteDegradesGracefully(DeletionPermissionTestBase):
+    """PROTECT must not surface as an unhandled server error."""
+
+    def test_delete_with_dependants_is_reported_not_a_500(self) -> None:
+        self.login('staff')
+        response = self.client.post(reverse(
+            'certifyingorganisation-delete',
+            kwargs={'slug': self.certifying_organisation.slug},
+        ))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            CertifyingOrganisation.objects.filter(
+                pk=self.certifying_organisation.pk).exists())
 
 
 class TestCourseAttendeePermissions(DeletionPermissionTestBase):

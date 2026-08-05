@@ -3,7 +3,10 @@ import ast
 
 from base.models import Project
 from braces.views import LoginRequiredMixin, UserPassesTestMixin
-from certification.mixins import ActiveCertifyingOrganisationRequiredMixin
+from certification.mixins import (
+    ActiveCertifyingOrganisationRequiredMixin,
+    ProtectedErrorMessageMixin,
+)
 from certification.utilities import check_slug
 from django.conf import settings
 from django.contrib import messages
@@ -624,7 +627,9 @@ class CertifyingOrganisationArchivingView(
 
 
 # noinspection PyAttributeOutsideInit
-class CertifyingOrganisationDeleteView(CertificationManagerRequiredMixin, DeleteView):
+class CertifyingOrganisationDeleteView(
+    CertificationManagerRequiredMixin, ProtectedErrorMessageMixin, DeleteView
+):
     """Delete view for Certifying Organisation."""
 
     model = CertifyingOrganisation

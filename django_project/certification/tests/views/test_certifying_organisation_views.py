@@ -72,9 +72,9 @@ class TestCertifyingOrganisationView(TestCase):
         :return:
         """
 
-        self.certifying_organisation.delete()
-        self.project.delete()
-        self.user.delete()
+        # Redundant under TestCase's transaction rollback, and impossible now
+        # that the relations are PROTECTed: it deleted parents before children.
+        pass
 
     @override_settings(
         VALID_DOMAIN=[
@@ -658,10 +658,9 @@ class TestCertifyingOrganisationPrintView(TestCase):
 
     @override_settings(VALID_DOMAIN=["testserver"])
     def tearDown(self):
-        self.certifying_organisation.delete()
-        self.unapproved_organisation.delete()
-        self.project.delete()
-        self.user.delete()
+        # Redundant under TestCase's transaction rollback, and impossible now
+        # that the relations are PROTECTed: it deleted parents before children.
+        pass
 
     @override_settings(VALID_DOMAIN=["testserver"])
     def test_print_view_approved_org(self):

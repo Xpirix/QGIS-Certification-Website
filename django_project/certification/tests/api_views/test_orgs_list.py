@@ -59,9 +59,9 @@ class TestCertifyingOrganisationView(TestCase):
         :return:
         """
 
-        self.certifying_organisation.delete()
-        self.project.delete()
-        self.user.delete()
+        # Redundant under TestCase's transaction rollback, and impossible now
+        # that the relations are PROTECTed: it deleted parents before children.
+        pass
 
     @override_settings(
         VALID_DOMAIN=[

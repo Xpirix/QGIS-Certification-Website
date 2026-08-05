@@ -66,9 +66,11 @@ class Certificate(models.Model):
         null=True
     )
 
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
-    attendee = models.ForeignKey(Attendee, on_delete=models.CASCADE)
+    # An issued certificate is the record this whole system exists to keep.
+    # Nothing may remove one as a side effect of deleting something else.
+    author = models.ForeignKey(User, on_delete=models.PROTECT)
+    course = models.ForeignKey(Course, on_delete=models.PROTECT)
+    attendee = models.ForeignKey(Attendee, on_delete=models.PROTECT)
     objects = models.Manager()
 
     class Meta:

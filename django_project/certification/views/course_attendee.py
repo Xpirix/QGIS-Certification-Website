@@ -5,7 +5,9 @@ from django.views.generic import (
     DeleteView)
 from django.http import Http404
 from braces.views import LoginRequiredMixin
-from certification.mixins import CourseEditPermissionMixin
+from certification.mixins import (
+    CourseEditPermissionMixin,
+    ProtectedErrorMessageMixin)
 from ..models import (
     CourseAttendee,
     CertifyingOrganisation,
@@ -86,6 +88,7 @@ class CourseAttendeeCreateView(
 class CourseAttendeeDeleteView(
         LoginRequiredMixin,
         CourseEditPermissionMixin,
+        ProtectedErrorMessageMixin,
         DeleteView):
     """Delete view for Course Attendee."""
 

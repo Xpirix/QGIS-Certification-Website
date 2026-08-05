@@ -279,7 +279,9 @@ class Project(models.Model):
         null=True,  # This is needed to populate existing database.
     )
 
-    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    # PROTECT: deleting the owning user used to take the project with it, and
+    # from there every certifying organisation, course and certificate under it.
+    owner = models.ForeignKey(User, on_delete=models.PROTECT)
     slug = models.SlugField(unique=True)
     objects = models.Manager()
     approved_objects = ApprovedProjectManager()

@@ -4,6 +4,7 @@ from braces.views import LoginRequiredMixin
 from certification.mixins import (
     ActiveCertifyingOrganisationRequiredMixin,
     OrganisationEditPermissionMixin,
+    ProtectedErrorMessageMixin,
 )
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -182,6 +183,7 @@ class TrainingCenterDeleteView(
     LoginRequiredMixin,
     ActiveCertifyingOrganisationRequiredMixin,
     OrganisationEditPermissionMixin,
+    ProtectedErrorMessageMixin,
     DeleteView,
 ):
     """Delete view for Training Center."""
