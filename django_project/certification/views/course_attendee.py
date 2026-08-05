@@ -5,6 +5,7 @@ from django.views.generic import (
     DeleteView)
 from django.http import Http404
 from braces.views import LoginRequiredMixin
+from certification.mixins import CourseEditPermissionMixin
 from ..models import (
     CourseAttendee,
     CertifyingOrganisation,
@@ -21,6 +22,7 @@ class CourseAttendeeMixin(object):
 
 class CourseAttendeeCreateView(
         LoginRequiredMixin,
+        CourseEditPermissionMixin,
         CourseAttendeeMixin, CreateView):
     """Create view for Course Attendee."""
 
@@ -83,6 +85,7 @@ class CourseAttendeeCreateView(
 
 class CourseAttendeeDeleteView(
         LoginRequiredMixin,
+        CourseEditPermissionMixin,
         DeleteView):
     """Delete view for Course Attendee."""
 
@@ -109,9 +112,29 @@ class CourseAttendeeDeleteView(
 
         self.course_slug = self.kwargs.get('course_slug', None)
         self.pk = self.kwargs.get('pk', None)
-        self.course = Course.objects.get(slug=self.course_slug)
+        self.course = self.get_course()
         return super(
             CourseAttendeeDeleteView, self).get(request, *args, **kwargs)
+
+    def get_course(self):
+        """Look the course up within the organisation named in the URL.
+
+        Matching on the course slug alone would let a user who passes the
+        permission check for their own organisation act on another
+        organisation's course by pairing the two slugs.
+
+        :returns: The course this attendee link belongs to.
+        :rtype: Course
+        :raises: Http404
+        """
+
+        try:
+            return Course.objects.get(
+                slug=self.kwargs.get('course_slug', None),
+                certifying_organisation=self.certifying_organisation,
+            )
+        except Course.DoesNotExist:
+            raise Http404('Sorry! We could not find your course!')
 
     def post(self, request, *args, **kwargs):
         """Post the project_slug, organisation_slug, course_slug from the URL.
@@ -132,7 +155,7 @@ class CourseAttendeeDeleteView(
         self.project_slug = 'qgis'
         self.organisation_slug = self.kwargs.get('organisation_slug', None)
         self.course_slug = self.kwargs.get('course_slug', None)
-        self.course = Course.objects.get(slug=self.course_slug)
+        self.course = self.get_course()
         return super(
             CourseAttendeeDeleteView, self).post(request, *args, **kwargs)
 

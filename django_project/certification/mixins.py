@@ -135,7 +135,9 @@ class CourseEditPermissionMixin(OrganisationEditPermissionMixin):
         if not user.is_authenticated:
             return False
 
-        course_slug = self.kwargs.get("slug")
+        # Course URLs name the course "slug"; URLs for things hanging off a
+        # course, such as its attendees, name it "course_slug".
+        course_slug = self.kwargs.get("slug") or self.kwargs.get("course_slug")
         if course_slug is None:
             # Creating: any convener of this organisation may add a course.
             return CourseConvener.objects.filter(
