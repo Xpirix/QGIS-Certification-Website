@@ -1263,9 +1263,6 @@ class CertificateRevokeView(
         self.pk = self.kwargs.get('pk', None)
         self.course = Course.objects.get(slug=self.course_slug)
 
-        if not self.course.editable:
-            return HttpResponseForbidden('Course is not editable.')
-
         return super(
             CertificateRevokeView, self).get(request, *args, **kwargs)
 
@@ -1292,6 +1289,51 @@ class CertificateRevokeView(
 
         return super(
             CertificateRevokeView, self).post(request, *args, **kwargs)
+
+    def dispatch(self, request, *args, **kwargs):
+        """Refuse revocation once the certificate's 7 day window has closed.
+
+        This is checked here rather than in get(), so that it covers POST as
+        well: enforcing it on GET alone left the window bypassable by posting
+        to the URL directly.
+        """
+
+        course_slug = self.kwargs.get('course_slug', None)
+        try:
+            course = Course.objects.get(slug=course_slug)
+        except Course.DoesNotExist:
+            raise Http404('Sorry! We could not find your course!')
+
+        certificate = Certificate.objects.filter(
+            course=course, attendee__pk=self.kwargs.get('pk')
+        ).first()
+
+        if certificate and not certificate.is_revocable:
+            if certificate.issue_date:
+                reason = _(
+                    'Certificates can only be revoked within %(days)s days of '
+                    'being issued, and this one was issued on %(issued)s.'
+                ) % {
+                    'days': Certificate.REVOCATION_WINDOW_DAYS,
+                    'issued': certificate.issue_date,
+                }
+            else:
+                reason = _(
+                    'This certificate has no recorded issue date and is kept '
+                    'as a permanent record.'
+                )
+            messages.error(
+                request,
+                _('This certificate can no longer be revoked. %(reason)s')
+                % {'reason': reason}
+            )
+            return HttpResponseRedirect(reverse('course-detail', kwargs={
+                'organisation_slug': self.kwargs.get('organisation_slug'),
+                'slug': course_slug,
+            }))
+
+        return super(
+            CertificateRevokeView, self).dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         """Define the redirect URL.
@@ -1321,7 +1363,14 @@ class CertificateRevokeView(
         qs = Certificate.objects.filter(course=self.course)
         return qs
 
-    def delete(self, request, *args, **kwargs):
+    def form_valid(self, form):
+        """Refund the credit and remove the PDF, then delete the certificate.
+
+        This logic used to live in delete(). Since Django 4.0 DeleteView
+        deletes through FormMixin and never calls delete(), so none of it was
+        running: revoking a certificate silently failed to refund the
+        organisation and left the generated PDF on disk.
+        """
 
         # Update organisation credits every time a certificate is revoked.
         organisation = \
@@ -1333,8 +1382,8 @@ class CertificateRevokeView(
         organisation.organisation_credits = remaining_credits
         organisation.save()
 
-        # Delete existing certificate
-        certificate = self.get_object()
+        # Remove the rendered certificate so a revoked ID cannot be served.
+        certificate = self.object
         filename = "{}.{}".format(certificate.certificateID, "pdf")
         project_folder = (
             organisation.project.name.lower()).replace(' ', '_')
@@ -1347,7 +1396,7 @@ class CertificateRevokeView(
             os.remove(pathname)
 
         return super(
-            CertificateRevokeView, self).delete(request, *args, **kwargs)
+            CertificateRevokeView, self).form_valid(form)
 
 
 class CheckoutSessionSuccessView(TemplateView):

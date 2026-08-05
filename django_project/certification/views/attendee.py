@@ -1,7 +1,6 @@
 # coding=utf-8
 import io
 import csv
-from datetime import timedelta, datetime
 
 from django.db import transaction
 from django.http import HttpResponseForbidden
@@ -306,11 +305,6 @@ class AttendeeUpdateView(LoginRequiredMixin, UpdateView):
             course=course,
             attendee=self.get_object()
         ).first()
-        if certificate:
-            if (
-                not certificate.issue_date or
-                certificate.issue_date +
-                    timedelta(days=7) <= datetime.today().date()
-            ):
-                return HttpResponseForbidden('Course is not editable.')
+        if certificate and not certificate.is_revocable:
+            return HttpResponseForbidden('Course is not editable.')
         return super(AttendeeUpdateView, self).get(request, *args, **kwargs)

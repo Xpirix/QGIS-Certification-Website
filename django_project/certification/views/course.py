@@ -1,14 +1,18 @@
 # coding=utf-8
-from datetime import datetime, timedelta
-
 from base.models import Project
 from braces.views import LoginRequiredMixin
-from certification.mixins import ActiveCertifyingOrganisationRequiredMixin
+from certification.mixins import (
+    ActiveCertifyingOrganisationRequiredMixin,
+    CourseEditPermissionMixin,
+    ProtectChildrenDeleteMixin,
+)
 from certification.utilities import check_slug
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
+from django.db.models import QuerySet
 from django.http import Http404, HttpResponseRedirect
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 
 from ..forms import CourseForm
@@ -25,6 +29,7 @@ class CourseMixin(object):
 class CourseCreateView(
     LoginRequiredMixin,
     ActiveCertifyingOrganisationRequiredMixin,
+    CourseEditPermissionMixin,
     CourseMixin,
     CreateView,
 ):
@@ -93,6 +98,7 @@ class CourseCreateView(
 class CourseUpdateView(
     LoginRequiredMixin,
     ActiveCertifyingOrganisationRequiredMixin,
+    CourseEditPermissionMixin,
     CourseMixin,
     UpdateView,
 ):
@@ -181,16 +187,20 @@ class CourseUpdateView(
         context["project_slug"] = "qgis"
         return context
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Course]:
         """Get the queryset for this view.
-            In front end, only staff, organisation owners and course convener
-            can see the edit button.
 
-        :returns: All Course objects
+        Scoped to the organisation in the URL so a course cannot be edited
+        through another organisation's address. Who may edit it is decided
+        by CourseEditPermissionMixin.
+
+        :returns: Course queryset filtered by Certifying Organisation
         :rtype: QuerySet
         """
 
-        qs = Course.objects.all()
+        qs = Course.objects.filter(
+            certifying_organisation=self.certifying_organisation
+        )
         return qs
 
     def get_success_url(self):
@@ -265,13 +275,65 @@ class CourseUpdateView(
 
 
 class CourseDeleteView(
-    LoginRequiredMixin, ActiveCertifyingOrganisationRequiredMixin, DeleteView
+    LoginRequiredMixin,
+    ActiveCertifyingOrganisationRequiredMixin,
+    CourseEditPermissionMixin,
+    ProtectChildrenDeleteMixin,
+    DeleteView,
 ):
     """Delete view for Course."""
 
     model = Course
     context_object_name = "course"
     template_name = "course/delete.html"
+
+    def get_blocking_children(self) -> list[tuple[str, int]]:
+        """Certificates and course attendees both cascade from a course, so
+        either one protects it from deletion.
+
+        :returns: (label, count) for each non-empty relation.
+        :rtype: list
+        """
+
+        blocking_children = []
+        certificate_count = self.object.certificate_set.count()
+        if certificate_count:
+            blocking_children.append(
+                ("certificate" if certificate_count == 1 else "certificates",
+                 certificate_count)
+            )
+        attendee_count = self.object.courseattendee_set.count()
+        if attendee_count:
+            blocking_children.append(
+                ("attendee" if attendee_count == 1 else "attendees",
+                 attendee_count)
+            )
+        return blocking_children
+
+    def get_context_data(self, **kwargs):
+        """Tell the template which of the two situations applies."""
+
+        context = super(CourseDeleteView, self).get_context_data(**kwargs)
+        if getattr(self, "object", None) is not None:
+            context["permanent_certificate_count"] = (
+                self.object.permanent_certificate_count
+            )
+        return context
+
+    def get_blocked_message(
+        self, blocking_children: list[tuple[str, int]]
+    ) -> str:
+        """Distinguish "not yet" from "not ever"."""
+
+        permanent_count = self.object.permanent_certificate_count
+        if permanent_count:
+            return _(
+                "This course cannot be deleted. It holds %(count)s "
+                "certificate(s) that can no longer be revoked, so it is kept "
+                "as a permanent record."
+            ) % {"count": permanent_count}
+        return super(CourseDeleteView, self).get_blocked_message(
+            blocking_children)
 
     def get(self, request, *args, **kwargs):
         """Get the organisation_slug from the URL
@@ -482,11 +544,7 @@ class CourseDetailView(
                 course=self.course, attendee=course_attendee.attendee
             ).first()
             if certificate:
-                course_attendee.editable = (
-                    certificate.issue_date
-                    and certificate.issue_date + timedelta(days=7)
-                    > datetime.today().date()
-                )
+                course_attendee.editable = certificate.is_revocable
             else:
                 course_attendee.editable = True
         context["attendees"] = attendees

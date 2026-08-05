@@ -12,9 +12,36 @@
 
 {% block content %}
     <form action="" id="delete-confirmation" method="post" class="box-content">{% csrf_token %}
-        <div class="notification is-danger is-light">
-            <p>Are you sure you want to delete the course below?</p>
-        </div>
+        {% if permanent_certificate_count %}
+            <div class="notification is-danger is-light">
+                <p><strong>This course cannot be deleted.</strong></p>
+                <p>
+                    It holds {{ permanent_certificate_count }} certificate{{ permanent_certificate_count|pluralize }}
+                    that can no longer be revoked, because the 7 day
+                    revocation window has closed. Those certificates are a
+                    permanent record, so the course has to be kept.
+                </p>
+            </div>
+        {% elif blocking_children %}
+            <div class="notification is-danger is-light">
+                <p><strong>This course cannot be deleted yet.</strong></p>
+                <p>It still has:</p>
+                <ul>
+                    {% for label, count in blocking_children %}
+                        <li>{{ count }} {{ label }}</li>
+                    {% endfor %}
+                </ul>
+                <p>
+                    Every certificate on this course can still be revoked, so
+                    you can remove these records first and then delete the
+                    course.
+                </p>
+            </div>
+        {% else %}
+            <div class="notification is-danger is-light">
+                <p>Are you sure you want to delete the course below?</p>
+            </div>
+        {% endif %}
         <div>
             <h3 class="title is-4">Course: {{ course.name }}</h3>
             <div class="columns">
@@ -29,6 +56,7 @@
             </div>
         </div>
         <div class="buttons is-right">
+            {% if not blocking_children %}
             <a class="button is-danger"
                href="#"
                onClick="document.getElementById('delete-confirmation').submit()"
@@ -38,6 +66,7 @@
                 </span>
                 <span>Delete</span>
             </a>
+            {% endif %}
             <a class="button is-light"
                href='{% url "certifyingorganisation-detail" slug=course.certifying_organisation.slug %}'
                title="Cancel">

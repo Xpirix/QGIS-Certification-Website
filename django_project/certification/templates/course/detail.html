@@ -279,6 +279,7 @@
                                         {% endif %}
                                         {% if attendee.attendee.pk in certificates %}
                                         {% if attendee.attendee.pk in paid_certificates %}
+                                        {# attendee.editable is Certificate.is_revocable, the rule CertificateRevokeView enforces. #}
                                         {% if attendee.editable %}
                                         <a class="button is-small is-light has-tooltip-multiline has-tooltip-arrow has-tooltip-bottom" data-tooltip="Revoke Certificate" href='{% url "revoke-certificate" organisation_slug=course.certifying_organisation.slug course_slug=course.slug pk=attendee.attendee.pk %}'>
                                             <span class="icon is-small">
@@ -286,7 +287,7 @@
                                             </span>
                                         </a>
                                         {% else %}
-                                        <a class="button is-small is-light has-tooltip-multiline has-tooltip-arrow has-tooltip-bottom" data-tooltip="Revoke Certificate is only available 7 days after the certificate is issued." href="#" disabled>
+                                        <a class="button is-small is-light has-tooltip-multiline has-tooltip-arrow has-tooltip-bottom" data-tooltip="Certificates can only be revoked within 7 days of being issued. This one is now a permanent record." href="#" disabled>
                                             <span class="icon is-small">
                                                 <i class="fas fa-exclamation-triangle"></i>
                                             </span>
