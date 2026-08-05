@@ -155,6 +155,12 @@ class TestOrganisationDeleteDegradesGracefully(DeletionPermissionTestBase):
             CertifyingOrganisation.objects.filter(
                 pk=self.certifying_organisation.pk).exists())
 
+        # The safety net message is the only explanation the user gets, so it
+        # has to reach the page and name what is in the way.
+        self.assertContains(response, 'cannot be deleted because other')
+        self.assertContains(response, 'training center')
+        self.assertContains(response, 'course type')
+
 
 class TestCourseAttendeePermissions(DeletionPermissionTestBase):
     """This view had no organisation scoping at all."""
