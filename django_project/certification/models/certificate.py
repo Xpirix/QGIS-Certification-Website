@@ -3,6 +3,8 @@
 
 """
 
+import datetime
+
 from django.urls import reverse
 from django.db import models
 from django.contrib.auth.models import User
@@ -96,3 +98,28 @@ class Certificate(models.Model):
         return reverse('certificate-detail', kwargs={
             'slug': self.certificateID,
         })
+
+    #: Days after issue during which a certificate may still be revoked.
+    REVOCATION_WINDOW_DAYS = 7
+
+    @property
+    def is_revocable(self) -> bool:
+        """Whether this certificate may still be revoked.
+
+        Keyed to issue_date rather than the course end date. issue_date is
+        auto_now_add and read-only in the admin, so it cannot be moved;
+        Course.end_date is part of CourseForm, so keying the window to it
+        would let anyone who can edit a course reopen the window at will.
+
+        A certificate with no issue_date predates the field and is treated
+        as a permanent record.
+
+        :returns: True while the certificate is still within the window.
+        :rtype: bool
+        """
+
+        if not self.issue_date:
+            return False
+        window_closes = self.issue_date + datetime.timedelta(
+            days=self.REVOCATION_WINDOW_DAYS)
+        return window_closes > datetime.date.today()

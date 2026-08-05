@@ -1,6 +1,4 @@
 # coding=utf-8
-from datetime import datetime, timedelta
-
 from base.models import Project
 from braces.views import LoginRequiredMixin
 from certification.mixins import (
@@ -520,11 +518,7 @@ class CourseDetailView(
                 course=self.course, attendee=course_attendee.attendee
             ).first()
             if certificate:
-                course_attendee.editable = (
-                    certificate.issue_date
-                    and certificate.issue_date + timedelta(days=7)
-                    > datetime.today().date()
-                )
+                course_attendee.editable = certificate.is_revocable
             else:
                 course_attendee.editable = True
         context["attendees"] = attendees
