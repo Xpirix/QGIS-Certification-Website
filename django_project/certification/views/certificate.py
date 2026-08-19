@@ -11,9 +11,10 @@ from PIL import Image
 import re
 from decimal import Decimal
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.http import (
-    Http404, HttpResponse, HttpResponseRedirect, FileResponse,
+    Http404, HttpRequest, HttpResponse, HttpResponseRedirect, FileResponse,
     HttpResponseForbidden
 )
 from django.views.generic import (
@@ -21,8 +22,8 @@ from django.views.generic import (
 from django.conf import settings
 from django.urls import reverse
 from django.db import IntegrityError
-from django.core.exceptions import ValidationError
-from django.shortcuts import render
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.shortcuts import get_object_or_404, render
 from django.utils.translation import gettext as _
 from braces.views import LoginRequiredMixin
 from djstripe.enums import PaymentIntentStatus
@@ -47,6 +48,7 @@ from ..models import (
     CourseAttendee
 )
 from ..forms import CertificateForm
+from ..mixins import user_can_manage_organisation
 from base.models.project import Project
 from helpers.notification import send_notification
 
@@ -540,29 +542,61 @@ def download_certificates_zip(request, **kwargs):
     return response
 
 
-def update_paid_status(request, **kwargs):
-    """View to update the is_paid status of certificate in a course."""
+@login_required
+def update_paid_status(request: HttpRequest, **kwargs: object) -> HttpResponse:
+    """View to update the is_paid status of certificate in a course.
+
+    Marking a certificate paid spends the organisation's credits, which are
+    bought with real money, so the caller has to be someone entitled to
+    manage that organisation. The course and attendee are looked up within
+    the organisation named in the URL rather than by slug and pk alone -
+    otherwise a user who legitimately manages organisation A could act on
+    organisation B's course by pairing the two identifiers.
+
+    :param request: HTTP request object
+    :type request: HttpRequest
+
+    :param kwargs: Keyword arguments from the URL
+    :type kwargs: dict
+
+    :returns: The confirmation page, or a redirect to the course detail page.
+    :rtype: HttpResponse
+    """
 
     project_slug = 'qgis'
     organisation_slug = kwargs.pop('organisation_slug')
     course_slug = kwargs.pop('course_slug')
     attendee_pk = kwargs.pop('pk')
-    course = Course.objects.get(slug=course_slug)
-    attendee = Attendee.objects.get(pk=attendee_pk)
-    project = Project.objects.get(slug=project_slug)
+    organisation = get_object_or_404(
+        CertifyingOrganisation, slug=organisation_slug)
+
+    if not user_can_manage_organisation(request.user, organisation):
+        raise PermissionDenied(
+            _('You do not have permission to modify this organisation.'))
+
+    course = get_object_or_404(
+        Course, slug=course_slug, certifying_organisation=organisation)
+    attendee = get_object_or_404(
+        Attendee, pk=attendee_pk, certifying_organisation=organisation)
+    project = get_object_or_404(Project, slug=project_slug)
     url = reverse('course-detail', kwargs={
         'organisation_slug': organisation_slug,
         'slug': course_slug
     })
 
     if request.method == 'POST':
+        remaining_credits = (
+            (organisation.organisation_credits or 0) -
+            project.certificate_credit
+        )
+        if remaining_credits < 0:
+            return HttpResponseForbidden(
+                _('You do not have enough credits to pay for this '
+                  'certificate.'))
+
         queryset = \
             Certificate.objects.filter(course=course, attendee=attendee)
         queryset.update(is_paid=True)
-        organisation = \
-            CertifyingOrganisation.objects.get(slug=organisation_slug)
-        remaining_credits = \
-            organisation.organisation_credits - project.certificate_credit
         organisation.organisation_credits = remaining_credits
         organisation.save()
         return HttpResponseRedirect(url)
