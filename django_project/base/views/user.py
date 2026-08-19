@@ -1,5 +1,5 @@
 # coding=utf-8
-from django.http import Http404
+from django.db.models import QuerySet
 from django.urls import reverse
 from braces.views import LoginRequiredMixin
 from django.views.generic import UpdateView, TemplateView
@@ -22,33 +22,21 @@ class UserUpdateView(LoginRequiredMixin, UpdateView):
     template_name = 'account/update.html'
     context_object_name = 'user'
 
-    def get_context_data(self, **kwargs):
-        """Get the context data which is passed to a template.
+    def get_queryset(self) -> QuerySet:
+        """Restrict the view to the requesting user's own record.
 
-        :param kwargs: Any arguments to pass to the superclass.
-        :type kwargs: dict
+        The check has to live here rather than in get_context_data(). Django
+        calls get_context_data() when it renders the form and when the form
+        fails validation, but a successful POST goes straight from
+        get_object() to form_valid() to a redirect, so a check placed there
+        guarded the page and not the update. Scoping the queryset makes
+        get_object() raise Http404 on every method instead.
 
-        :returns: Context data which will be passed to the template.
-        :rtype: dict
-        """
-
-        context = super(
-            UserUpdateView, self).get_context_data(**kwargs)
-
-        # Only the user itself can update their profile.
-        if self.request.user.pk != context['user'].pk:
-            raise Http404
-        return context
-
-    def get_queryset(self):
-        """Get the queryset for this view.
-
-        :returns: All Course Convener objects
+        :returns: A queryset containing only the requesting user.
         :rtype: QuerySet
         """
 
-        qs = User.objects.all()
-        return qs
+        return User.objects.filter(pk=self.request.user.pk)
 
     def get_form_kwargs(self):
         """Get keyword arguments from form.
