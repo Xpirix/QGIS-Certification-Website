@@ -579,11 +579,16 @@ class AttendeeForm(forms.ModelForm):
 
     class Meta:
         model = Attendee
+        # certifying_organisation is deliberately absent. It was listed here
+        # and hidden with a HiddenInput widget, but a hidden widget is a
+        # display choice and not a server-side constraint: the field remained
+        # a ModelChoiceField over every organisation, so a crafted POST could
+        # file the attendee under one the author has no rights to. The view
+        # supplies it in save() from the organisation named in the URL.
         fields = (
             'firstname',
             'surname',
             'email',
-            'certifying_organisation',
         )
 
     def __init__(self, *args, **kwargs):
@@ -603,9 +608,6 @@ class AttendeeForm(forms.ModelForm):
         self.helper.layout = layout
         self.helper.html5_required = False
         super(AttendeeForm, self).__init__(*args, **kwargs)
-        self.fields['certifying_organisation'].initial = \
-            self.certifying_organisation
-        self.fields['certifying_organisation'].widget = forms.HiddenInput()
         self.helper.layout.append(
             HTML(
                 '<button type="submit" class="button is-success mt-5" name="submit">'
@@ -618,6 +620,7 @@ class AttendeeForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super(AttendeeForm, self).save(commit=False)
         instance.author = self.user
+        instance.certifying_organisation = self.certifying_organisation
         instance.save()
         return instance
 
@@ -626,11 +629,14 @@ class UpdateAttendeeForm(forms.ModelForm):
 
     class Meta:
         model = Attendee
+        # certifying_organisation is deliberately absent; see AttendeeForm.
+        # On update it was worse than a mass-assignment hole: because the
+        # field accepted any organisation, a POST could move another
+        # organisation's attendee into the attacker's own.
         fields = (
             'firstname',
             'surname',
             'email',
-            'certifying_organisation',
         )
 
     def __init__(self, *args, **kwargs):
@@ -649,9 +655,6 @@ class UpdateAttendeeForm(forms.ModelForm):
         self.helper.layout = layout
         self.helper.html5_required = False
         super(UpdateAttendeeForm, self).__init__(*args, **kwargs)
-        self.fields['certifying_organisation'].initial = \
-            self.certifying_organisation
-        self.fields['certifying_organisation'].widget = forms.HiddenInput()
         self.helper.layout.append(
             HTML(
                 '<button type="submit" class="button is-success mt-5" name="submit">'

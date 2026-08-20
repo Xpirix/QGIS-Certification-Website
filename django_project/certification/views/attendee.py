@@ -3,16 +3,19 @@ import io
 import csv
 
 from django.db import transaction
-from django.http import HttpResponseForbidden
+from django.db.models import QuerySet
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import (
     CreateView, FormView, UpdateView)
 from braces.views import LoginRequiredMixin, FormMessagesMixin
 from certification.models import (
-    Attendee, CertifyingOrganisation, CourseAttendee, Course, Certificate
+    Attendee, CourseAttendee, Course, Certificate
 )
 from certification.forms import (
     AttendeeForm, CsvAttendeeForm, UpdateAttendeeForm)
+from certification.mixins import CourseEditPermissionMixin
 
 
 class AttendeeMixin(object):
@@ -22,8 +25,18 @@ class AttendeeMixin(object):
     form_class = AttendeeForm
 
 
-class AttendeeCreateView(LoginRequiredMixin, AttendeeMixin, CreateView):
-    """Create view for Attendee."""
+class AttendeeCreateView(
+        LoginRequiredMixin,
+        CourseEditPermissionMixin,
+        AttendeeMixin,
+        CreateView):
+    """Create view for Attendee.
+
+    CourseEditPermissionMixin resolves the organisation named in the URL and
+    refuses the request unless the user may act on it. Without it any account
+    could add attendees to any organisation's course, since the slug was read
+    from the URL and used without being checked against the requester.
+    """
 
     context_object_name = 'attendee'
     template_name = 'attendee/create.html'
@@ -71,12 +84,11 @@ class AttendeeCreateView(LoginRequiredMixin, AttendeeMixin, CreateView):
         :rtype: dict
         """
 
+        # organisation_slug and certifying_organisation are set by
+        # CourseEditPermissionMixin.dispatch(), before any of this runs.
         kwargs = super(AttendeeCreateView, self).get_form_kwargs()
         self.project_slug = 'qgis'
-        self.organisation_slug = self.kwargs.get('organisation_slug', None)
         self.course_slug = self.kwargs.get('slug', None)
-        self.certifying_organisation = \
-            CertifyingOrganisation.objects.get(slug=self.organisation_slug)
         kwargs.update({
             'user': self.request.user,
             'certifying_organisation': self.certifying_organisation
@@ -92,7 +104,13 @@ class AttendeeCreateView(LoginRequiredMixin, AttendeeMixin, CreateView):
             if form.is_valid():
                 object = form.save()
                 course_slug = self.kwargs.get('slug', None)
-                course = Course.objects.get(slug=course_slug)
+                # Scoped to the organisation, so that permission granted for
+                # this organisation cannot be spent on another one's course
+                # by pairing the two slugs.
+                course = get_object_or_404(
+                    Course,
+                    slug=course_slug,
+                    certifying_organisation=self.certifying_organisation)
                 course_attendee = CourseAttendee(
                     attendee=object,
                     course=course,
@@ -102,14 +120,36 @@ class AttendeeCreateView(LoginRequiredMixin, AttendeeMixin, CreateView):
         return super(AttendeeCreateView, self).form_valid(form)
 
 
-class CsvUploadView(FormMessagesMixin, LoginRequiredMixin, FormView):
+class CsvUploadView(
+        FormMessagesMixin,
+        LoginRequiredMixin,
+        CourseEditPermissionMixin,
+        FormView):
     """
     Allow upload of attendees through CSV file.
+
+    This endpoint writes an unbounded number of rows into the organisation
+    named in the URL, so it needs the same permission check as the rest of
+    the course views rather than only requiring a login.
     """
 
     context_object_name = 'csvupload'
     form_class = CsvAttendeeForm
     template_name = 'attendee/upload_attendee_csv.html'
+
+    # A CSV of attendees is a class list, not a dataset. The cap is here to
+    # bound what a single request can insert.
+    maximum_rows = 1000
+
+    # FormMessagesMixin raises ImproperlyConfigured if these are unset, and
+    # they were previously only assigned inside the success path - so any
+    # invalid submission, including simply not choosing a file, produced a
+    # 500 rather than the form again. The success path still overrides
+    # form_valid_message with the row counts.
+    form_valid_message = 'The attendees were uploaded.'
+    form_invalid_message = (
+        'Something went wrong while running the upload. Please check the '
+        'file and try again.')
 
     def get_success_url(self):
         """Define the redirect URL.
@@ -138,10 +178,26 @@ class CsvUploadView(FormMessagesMixin, LoginRequiredMixin, FormView):
 
         context = super(
             CsvUploadView, self).get_context_data(**kwargs)
-        context['certifyingorganisation'] = \
-            CertifyingOrganisation.objects.get(slug=self.organisation_slug)
-        context['course'] = Course.objects.get(slug=self.slug)
+        context['certifyingorganisation'] = self.certifying_organisation
+        context['course'] = self.get_course()
         return context
+
+    def get_course(self) -> Course:
+        """Resolve the course, within the organisation named in the URL.
+
+        Looking the course up by slug alone would let a user with rights over
+        one organisation upload into another organisation's course by pairing
+        their own organisation slug with a foreign course slug.
+
+        :returns: The course this upload targets.
+        :rtype: Course
+        """
+
+        self.slug = self.kwargs.get('slug', None)
+        return get_object_or_404(
+            Course,
+            slug=self.slug,
+            certifying_organisation=self.certifying_organisation)
 
     def get_form_kwargs(self):
         """Get keyword arguments from form.
@@ -150,13 +206,12 @@ class CsvUploadView(FormMessagesMixin, LoginRequiredMixin, FormView):
         :rtype: dict
         """
 
+        # organisation_slug and certifying_organisation come from
+        # CourseEditPermissionMixin.dispatch().
         kwargs = super(CsvUploadView, self).get_form_kwargs()
         self.project_slug = 'qgis'
-        self.organisation_slug = self.kwargs.get('organisation_slug', None)
         self.slug = self.kwargs.get('slug', None)
-        self.course = Course.objects.get(slug=self.slug)
-        self.certifying_organisation = \
-            CertifyingOrganisation.objects.get(slug=self.organisation_slug)
+        self.course = self.get_course()
         return kwargs
 
     @transaction.atomic()
@@ -172,18 +227,39 @@ class CsvUploadView(FormMessagesMixin, LoginRequiredMixin, FormView):
         form_class = self.get_form_class()
         form = self.get_form(form_class)
         attendees_file = request.FILES.get('file')
-        attendees_file.seek(0)
-        course = Course.objects.get(slug=self.slug)
+        course = self.get_course()
         if form.is_valid():
             if attendees_file:
-                reader = csv.DictReader(
-                    io.StringIO(attendees_file.read().decode('utf-8'))
-                )
+                attendees_file.seek(0)
+                try:
+                    contents = attendees_file.read().decode('utf-8')
+                except UnicodeDecodeError:
+                    self.form_invalid_message = (
+                        'That file is not valid UTF-8 text. Please save the '
+                        'spreadsheet as a UTF-8 CSV and try again.')
+                    return self.form_invalid(form)
+
+                reader = csv.DictReader(io.StringIO(contents))
                 fieldnames = reader.fieldnames
+                # Rows are read positionally, so a file with fewer than three
+                # columns used to raise IndexError and return a 500.
+                if not fieldnames or len(fieldnames) < 3:
+                    self.form_invalid_message = (
+                        'The CSV needs at least three columns: first name, '
+                        'surname and email address.')
+                    return self.form_invalid(form)
+
+                rows = list(reader)
+                if len(rows) > self.maximum_rows:
+                    self.form_invalid_message = (
+                        'That file has {} rows; this form accepts at most '
+                        '{} at a time.'.format(len(rows), self.maximum_rows))
+                    return self.form_invalid(form)
+
                 attendee_count = 0
                 course_attendee_count = 0
                 existing_attendee_count = 0
-                for row in reader:
+                for row in rows:
                     # We should have logic here to first see if the attendee
                     # already exists and if they do, just add them to the
                     # course
@@ -242,13 +318,31 @@ class CsvUploadView(FormMessagesMixin, LoginRequiredMixin, FormView):
             return self.form_invalid(form)
 
 
-class AttendeeUpdateView(LoginRequiredMixin, UpdateView):
+class AttendeeUpdateView(
+        LoginRequiredMixin,
+        CourseEditPermissionMixin,
+        UpdateView):
     """View for updating attendee."""
 
     context_object_name = 'attendee'
     template_name = 'attendee/update.html'
     model = Attendee
     form_class = UpdateAttendeeForm
+
+    def get_queryset(self) -> QuerySet:
+        """Restrict lookups to attendees of the organisation in the URL.
+
+        Without this, get_object() selected from every attendee in the system
+        by the primary key in the URL, and those keys are sequential - so the
+        whole attendee table, every trainee's name and email address, could be
+        walked and rewritten by any account.
+
+        :returns: Attendees belonging to this certifying organisation.
+        :rtype: QuerySet
+        """
+
+        return Attendee.objects.filter(
+            certifying_organisation=self.certifying_organisation)
 
     def get_success_url(self):
         """Define the redirect URL.
@@ -286,25 +380,53 @@ class AttendeeUpdateView(LoginRequiredMixin, UpdateView):
         :rtype: dict
         """
 
+        # organisation_slug and certifying_organisation come from
+        # CourseEditPermissionMixin.dispatch().
         kwargs = super(AttendeeUpdateView, self).get_form_kwargs()
         self.project_slug = 'qgis'
-        self.organisation_slug = self.kwargs.get('organisation_slug', None)
         self.course_slug = self.kwargs.get('course_slug', None)
-        self.certifying_organisation = \
-            CertifyingOrganisation.objects.get(slug=self.organisation_slug)
         kwargs.update({
             'user': self.request.user,
             'certifying_organisation': self.certifying_organisation
         })
         return kwargs
 
-    def get(self, request, *args, **kwargs):
+    def certificate_blocks_editing(self) -> bool:
+        """Check whether an issued certificate freezes this attendee.
+
+        :returns: True if the attendee's certificate can no longer be revoked.
+        :rtype: bool
+        """
+
         self.course_slug = self.kwargs.get('course_slug', None)
-        course = Course.objects.get(slug=self.course_slug)
+        course = Course.objects.filter(
+            slug=self.course_slug,
+            certifying_organisation=self.certifying_organisation).first()
+        if course is None:
+            return False
         certificate = Certificate.objects.filter(
             course=course,
             attendee=self.get_object()
         ).first()
-        if certificate and not certificate.is_revocable:
+        return certificate is not None and not certificate.is_revocable
+
+    def get(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        if self.certificate_blocks_editing():
             return HttpResponseForbidden('Course is not editable.')
         return super(AttendeeUpdateView, self).get(request, *args, **kwargs)
+
+    def post(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        """Apply the same freeze to POST.
+
+        The check used to sit in get() only, so a direct POST skipped it and
+        the attendee named on an already-issued certificate could still be
+        renamed.
+        """
+
+        if self.certificate_blocks_editing():
+            return HttpResponseForbidden('Course is not editable.')
+        return super(AttendeeUpdateView, self).post(request, *args, **kwargs)
