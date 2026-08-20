@@ -48,7 +48,7 @@ from ..models import (
     CourseAttendee
 )
 from ..forms import CertificateForm
-from ..mixins import user_can_manage_organisation
+from ..mixins import CourseEditPermissionMixin, user_can_manage_organisation
 from base.models.project import Project
 from helpers.notification import send_notification
 
@@ -64,8 +64,16 @@ class CertificateMixin(object):
 
 
 class CertificateCreateView(
-    LoginRequiredMixin, CertificateMixin, CreateView):
-    """Create view for Certificate."""
+    LoginRequiredMixin, CourseEditPermissionMixin,
+        CertificateMixin, CreateView):
+    """Create view for Certificate.
+
+    Each success mints a genuine, publicly verifiable QGIS certificate and
+    spends the organisation's purchased credits, so it needs the same
+    permission check as the rest of the course views.
+    generate_all_certificate already checked both permission and balance;
+    this single-certificate path checked neither.
+    """
 
     context_object_name = 'certificate'
     template_name = 'certificate/create.html'
@@ -97,11 +105,9 @@ class CertificateCreateView(
 
         context = super(
             CertificateCreateView, self).get_context_data(**kwargs)
-        context['course'] = Course.objects.get(slug=self.course_slug)
-        context['attendee'] = Attendee.objects.get(pk=self.pk)
-        context['certificate_type'] = CertificateType.objects.get(
-            pk=self.certificate_type_pk
-        )
+        context['course'] = self.course
+        context['attendee'] = self.attendee
+        context['certificate_type'] = self.certificate_type
         return context
 
     def get_form_kwargs(self):
@@ -111,16 +117,26 @@ class CertificateCreateView(
         :rtype: dict
         """
 
+        # organisation_slug and certifying_organisation are set by
+        # CourseEditPermissionMixin.dispatch(). The course and attendee are
+        # resolved within that organisation rather than by identifier alone,
+        # so that rights over one organisation cannot be used to issue a
+        # certificate against another one's course or attendee.
         kwargs = super(CertificateCreateView, self).get_form_kwargs()
         self.project_slug = 'qgis'
-        self.organisation_slug = self.kwargs.get('organisation_slug', None)
         self.course_slug = self.kwargs.get('course_slug', None)
         self.certificate_type_pk = self.kwargs.get('certificate_type_pk', None)
         self.pk = self.kwargs.get('pk', None)
-        self.course = Course.objects.get(slug=self.course_slug)
-        self.attendee = Attendee.objects.get(pk=self.pk)
-        self.certificate_type = CertificateType.objects.get(
-            pk=self.certificate_type_pk)
+        self.course = get_object_or_404(
+            Course,
+            slug=self.course_slug,
+            certifying_organisation=self.certifying_organisation)
+        self.attendee = get_object_or_404(
+            Attendee,
+            pk=self.pk,
+            certifying_organisation=self.certifying_organisation)
+        self.certificate_type = get_object_or_404(
+            CertificateType, pk=self.certificate_type_pk)
         kwargs.update({
             'user': self.request.user,
             'course': self.course,
@@ -140,17 +156,17 @@ class CertificateCreateView(
 
         We check that there is no referential integrity error when saving."""
 
+        # The balance itself is enforced by CertificateForm.clean(), which
+        # refuses the form outright when there are not enough credits, so by
+        # the time we get here the subtraction cannot go negative.
+        organisation = self.certifying_organisation
+
         try:
             super(CertificateCreateView, self).form_valid(form)
 
             # Update organisation credits every time a certificate is issued.
-            organisation = \
-                CertifyingOrganisation.objects.get(
-                    slug=self.organisation_slug)
-            remaining_credits = \
-                organisation.organisation_credits - \
-                organisation.project.certificate_credit
-            organisation.organisation_credits = remaining_credits
+            cost = organisation.project.certificate_credit
+            organisation.organisation_credits -= cost
             organisation.save()
 
             return HttpResponseRedirect(self.get_success_url())
@@ -498,13 +514,36 @@ def certificate_pdf_view(request, **kwargs):
             raise Http404()
 
 
-def download_certificates_zip(request, **kwargs):
-    """Download all certificates in a course as one zip file."""
+@login_required
+def download_certificates_zip(
+        request: HttpRequest, **kwargs: object) -> HttpResponse:
+    """Download all certificates in a course as one zip file.
+
+    A single certificate is meant to be publicly verifiable by its ID, but
+    handing out a whole cohort is a different thing: organisation and course
+    slugs are listed on public pages, so with no check at all this turned a
+    per-certificate verification feature into a bulk export of every
+    attendee's name and course history across the whole site.
+
+    :param request: The incoming request.
+    :type request: HttpRequest
+
+    :returns: A zip file of the paid certificates for this course.
+    :rtype: HttpResponse
+    """
 
     project_slug = 'qgis'
     course_slug = kwargs.pop('course_slug')
-    course = Course.objects.get(slug=course_slug)
     organisation_slug = kwargs.pop('organisation_slug')
+    organisation = get_object_or_404(
+        CertifyingOrganisation, slug=organisation_slug)
+
+    if not user_can_manage_organisation(request.user, organisation):
+        raise PermissionDenied(
+            _('You do not have permission to download these certificates.'))
+
+    course = get_object_or_404(
+        Course, slug=course_slug, certifying_organisation=organisation)
 
     certificates = Certificate.objects.filter(course=course)
 

@@ -78,6 +78,10 @@ class TestCreditSystems(TestCase):
             CertificateCreateView(
                 project_slug=self.project.slug,
                 organisation_slug=self.certifying_organisation.slug,
+                # Normally set by CourseEditPermissionMixin.dispatch();
+                # supplied here because this test calls form_valid()
+                # directly rather than going through the view.
+                certifying_organisation=self.certifying_organisation,
                 course_slug=self.course.slug)
         form = \
             CertificateForm(
@@ -118,6 +122,10 @@ class TestCreditSystems(TestCase):
             CertificateCreateView(
                 project_slug=self.project.slug,
                 organisation_slug=self.certifying_organisation.slug,
+                # Normally set by CourseEditPermissionMixin.dispatch();
+                # supplied here because this test calls form_valid()
+                # directly rather than going through the view.
+                certifying_organisation=self.certifying_organisation,
                 course_slug=self.course.slug)
         form2 = \
             CertificateForm(
@@ -173,6 +181,10 @@ class TestCreditSystems(TestCase):
             CertificateCreateView(
                 project_slug=self.project.slug,
                 organisation_slug=certifying_organisation.slug,
+                # Normally set by CourseEditPermissionMixin.dispatch();
+                # supplied here because this test calls form_valid()
+                # directly rather than going through the view.
+                certifying_organisation=certifying_organisation,
                 course_slug=course.slug)
         form = \
             CertificateForm(
