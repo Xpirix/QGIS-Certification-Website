@@ -1,3 +1,4 @@
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings, Client
@@ -31,7 +32,10 @@ class CertificateCheckoutTest(TestCase):
         self.client = Client()
         self.client.post(
             '/set_language/', data={'language': 'en'})
-        self.project = ProjectF.create()
+        # credit_cost defaults to 0, and the checkout view now refuses to
+        # sell credits at an unconfigured price rather than handing them out
+        # for nothing, so the fixture has to set one.
+        self.project = ProjectF.create(credit_cost=Decimal('20.00'))
         self.certifying_organisation = (
             CertifyingOrganisationF.create(
                 project=self.project,

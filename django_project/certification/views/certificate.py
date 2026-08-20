@@ -1560,6 +1560,10 @@ class CreateCheckoutSessionView(LoginRequiredMixin, TemplateView):
 
     template_name = "checkout.html"
 
+    # An upper bound on a single purchase, so that a crafted "unit" cannot ask
+    # Stripe for an absurd line item.
+    maximum_credits = 100000
+
     def get_context_data(self, **kwargs):
         """
         Creates and returns a Stripe Checkout Session
@@ -1568,17 +1572,37 @@ class CreateCheckoutSessionView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
 
         org_id = self.request.GET.get('org', None)
-        unit = int(self.request.GET.get('unit', '0'))
-        total = int(self.request.GET.get('total', '0')) * 100
-        unit_amount = int(total / unit) if unit > 0 else 0
+
+        # Only the number of credits is taken from the client. The price used
+        # to come from a "total" query parameter as well, which the top-up
+        # page worked out in JavaScript - so the buyer set their own price.
+        # "unit=10000&total=1" gave int(100 / 10000) = 0 cents per credit,
+        # and the credits_quantity metadata below is what the success handler
+        # credits the organisation with.
+        try:
+            unit = int(self.request.GET.get('unit', '0'))
+        except (TypeError, ValueError):
+            raise Http404()
+
+        if unit <= 0 or unit > self.maximum_credits:
+            raise Http404()
 
         try:
             org = CertifyingOrganisation.objects.get(id=org_id)
         except CertifyingOrganisation.DoesNotExist:
             raise Http404()
 
-        if unit == 0 or total == 0:
+        # Credits are spent by the organisation, so buying them is an act on
+        # that organisation and needs the same check as any other.
+        if not user_can_manage_organisation(self.request.user, org):
+            raise PermissionDenied(
+                _('You may only buy credits for your own organisation.'))
+
+        project = org.project
+        unit_amount = int(Decimal(project.credit_cost or 0) * 100)
+        if unit_amount <= 0:
             raise Http404()
+        total = unit_amount * unit
 
         description = f'Top up credits for {org.name}'
 
