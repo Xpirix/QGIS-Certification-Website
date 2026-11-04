@@ -34,6 +34,7 @@ from django_renderpdf.views import PDFView
 from pure_pagination.mixins import PaginationMixin
 from rest_framework.views import APIView
 
+from ..checklist_answers import parse_checklist_answers
 from ..forms import CertifyingOrganisationForm
 from ..models import (
     ORGANIZATION_OWNER,
@@ -782,13 +783,44 @@ class CertifyingOrganisationCreateView(
             project=self.project
         )
         context["the_project"] = self.project
+        form = context["form"]
         context["available_checklist"] = ChecklistSerializer(
-            Checklist.objects.filter(
-                project=context["the_project"], target=ORGANIZATION_OWNER, active=True
-            ),
+            form.checklist_questions,
             many=True,
         ).data
+        answers = parse_checklist_answers(form.data) if form.is_bound else {}
+        for entry in context["available_checklist"]:
+            answer = answers.get(str(entry["id"]), {})
+            entry["answer"] = answer.get("answer", "")
+            entry["text"] = answer.get("text", "")
+            entry["error"] = form.checklist_errors.get(str(entry["id"]), "")
+            entry["hint"] = self.get_checklist_hint(entry)
         return context
+
+    def get_checklist_hint(self, question: dict) -> str:
+        """Say what we want in a question's text box.
+
+        This becomes the text box placeholder. A manager can write it when
+        they add the question. When they have not, it follows from whether a
+        link is required.
+
+        :param question: One serialised checklist question.
+        :type question: dict
+
+        :returns: The placeholder for the question's text box.
+        :rtype: str
+        """
+
+        if question["help_text"]:
+            return question["help_text"]
+        if not question["show_text_box"]:
+            return ""
+        if question["link_required"]:
+            return (
+                "Tell us what you did and add at least one link, "
+                "starting with http:// or https://."
+            )
+        return "A sentence or two is enough."
 
     def form_valid(self, form):
         """Save new created Certifying Organisation
@@ -895,7 +927,15 @@ class CertifyingOrganisationCreateView(
         kwargs = super(CertifyingOrganisationCreateView, self).get_form_kwargs()
         self.project_slug = "qgis"
         self.project = Project.objects.get(slug=self.project_slug)
-        kwargs.update({"user": self.request.user, "project": self.project})
+        kwargs.update(
+            {
+                "user": self.request.user,
+                "project": self.project,
+                "checklist_questions": Checklist.objects.filter(
+                    project=self.project, target=ORGANIZATION_OWNER, active=True
+                ),
+            }
+        )
         return kwargs
 
 
