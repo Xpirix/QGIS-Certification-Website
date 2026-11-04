@@ -6,12 +6,13 @@ from braces.views import LoginRequiredMixin, UserPassesTestMixin
 from certification.mixins import (
     ActiveCertifyingOrganisationRequiredMixin,
     ProtectedErrorMessageMixin,
+    user_can_manage_organisation,
 )
 from certification.utilities import check_slug
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.sessions.models import Session
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import OuterRef, Prefetch, Q, Subquery
@@ -34,7 +35,7 @@ from django_renderpdf.views import PDFView
 from pure_pagination.mixins import PaginationMixin
 from rest_framework.views import APIView
 
-from ..checklist_answers import parse_checklist_answers
+from ..checklist_answers import parse_checklist_answers, shows_evidence
 from ..forms import CertifyingOrganisationForm
 from ..models import (
     ORGANIZATION_OWNER,
@@ -757,14 +758,16 @@ class CertifyingOrganisationCreateView(
         """Define the redirect URL.
 
          After successful creation of the object, the User will be redirected
-         to the unapproved Certifying Organisation list page
-         for the object's parent Project.
+         to the application outcome page for the object.
 
         :returns: URL
         :rtype: HttpResponse
         """
 
-        return reverse("certifyingorganisation-list", kwargs={})
+        return reverse(
+            "certifyingorganisation-application-outcome",
+            kwargs={"slug": self.object.slug},
+        )
 
     def get_context_data(self, **kwargs):
         """Get the context data which is passed to a template.
@@ -831,7 +834,19 @@ class CertifyingOrganisationCreateView(
         :returns HttpResponseRedirect object to success_url
         :rtype: HttpResponseRedirect
 
-        We check that there is no referential integrity error when saving."""
+        An application whose checklist shows no evidence of contributions is
+        not saved. We check that there is no referential integrity error when
+        saving."""
+
+        answers = parse_checklist_answers(form.data)
+        questions = form.checklist_questions
+        # With no active questions there is nothing to show evidence for.
+        if questions and not shows_evidence(questions, answers):
+            return HttpResponseRedirect(
+                reverse(
+                    "certifyingorganisation-application-outcome", kwargs={}
+                )
+            )
 
         try:
             super(CertifyingOrganisationCreateView, self).form_valid(form)
@@ -938,6 +953,43 @@ class CertifyingOrganisationCreateView(
             }
         )
         return kwargs
+
+
+class CertifyingOrganisationApplicationOutcomeView(
+    LoginRequiredMixin, TemplateView
+):
+    """Tell the applicant what became of their application.
+
+    One page for both outcomes. With a slug the application was accepted and
+    the page names the organisation; without one the checklist showed no
+    evidence of contributions and nothing was created.
+    """
+
+    template_name = "certifying_organisation/application-outcome.html"
+
+    def get_context_data(self, **kwargs) -> dict:
+        """Add the organisation when the application was accepted.
+
+        :returns: Context data which will be passed to the template.
+        :rtype: dict
+        """
+
+        context = super(
+            CertifyingOrganisationApplicationOutcomeView, self
+        ).get_context_data(**kwargs)
+        slug = self.kwargs.get("slug")
+        if not slug:
+            return context
+
+        organisation = get_object_or_404(CertifyingOrganisation, slug=slug)
+        # A typed URL has no list row to hide it, so the rule the list
+        # applies is applied here too.
+        if not user_can_manage_organisation(self.request.user, organisation):
+            raise PermissionDenied(
+                "You do not have permission to view this application."
+            )
+        context["certifyingorganisation"] = organisation
+        return context
 
 
 # noinspection PyAttributeOutsideInit

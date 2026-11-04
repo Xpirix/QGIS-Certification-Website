@@ -31,6 +31,7 @@ from .views import (  # Certifying Organisation.; Course Type.; Course Convener.
     CertificateDetailView,
     CertificateRevokeView,
     CertificationManagementView,
+    CertifyingOrganisationApplicationOutcomeView,
     CertifyingOrganisationArchivingView,
     CertifyingOrganisationCreateView,
     CertifyingOrganisationDeleteView,
@@ -158,6 +159,16 @@ urlpatterns = [
         r"^create-certifyingorganisation/$",
         view=CertifyingOrganisationCreateView.as_view(),
         name="certifyingorganisation-create",
+    ),
+    url(
+        r"^create-certifyingorganisation/outcome/$",
+        view=CertifyingOrganisationApplicationOutcomeView.as_view(),
+        name="certifyingorganisation-application-outcome",
+    ),
+    url(
+        r"^create-certifyingorganisation/outcome/(?P<slug>[\w-]+)/$",
+        view=CertifyingOrganisationApplicationOutcomeView.as_view(),
+        name="certifyingorganisation-application-outcome",
     ),
     url(
         r"^certifyingorganisation/(?P<slug>[\w-]+)/update/$",
