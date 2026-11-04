@@ -47,7 +47,7 @@ class Checklist(models.Model):
                     'text box to add detail or not'),
         default=False
     )
-    
+
     link_required = models.BooleanField(
         help_text=_('Require at least one http or https link in the '
                     'text box. Only applies when the text box is shown.'),
