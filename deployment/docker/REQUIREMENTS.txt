@@ -54,7 +54,7 @@ pydyf==0.11.0
 xhtml2pdf~=0.2
 sentry-sdk~=2.2
 setuptools~=75.1
-pyjwt~=2.8
+pyjwt[crypto]~=2.8
 
 # New dependencies
 # Webpack
