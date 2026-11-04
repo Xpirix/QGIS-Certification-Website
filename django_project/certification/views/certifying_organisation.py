@@ -931,6 +931,7 @@ class CertifyingOrganisationCreateView(
             {
                 "user": self.request.user,
                 "project": self.project,
+                "owns_form_element": True,
                 "checklist_questions": Checklist.objects.filter(
                     project=self.project, target=ORGANIZATION_OWNER, active=True
                 ),
