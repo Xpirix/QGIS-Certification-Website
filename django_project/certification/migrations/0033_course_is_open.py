@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='course',
             name='is_open',
-            field=models.BooleanField(default=True, help_text='Untick this if only your own students can join, for example a university module. We then hide the course from the public lists of courses.', verbose_name='Open to external participants'),
+            field=models.BooleanField(default=True, help_text='Untick this if only your own students can join, for example a university module. We then show the course only to your organisation and the certification team.', verbose_name='Open to external participants'),
         ),
     ]

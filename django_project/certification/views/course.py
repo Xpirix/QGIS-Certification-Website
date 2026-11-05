@@ -5,6 +5,7 @@ from certification.mixins import (
     ActiveCertifyingOrganisationRequiredMixin,
     CourseEditPermissionMixin,
     ProtectChildrenDeleteMixin,
+    courses_visible_to,
 )
 from certification.utilities import check_slug
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -516,6 +517,11 @@ class CourseDetailView(
                     kwargs={"slug": self.certifying_organisation.slug},
                 )
             )
+
+        if not courses_visible_to(
+            request.user, self.certifying_organisation
+        ).filter(pk=self.object.pk).exists():
+            raise Http404("Sorry! We could not find your course!")
 
         return super(CourseDetailView, self).get(request, *args, **kwargs)
 

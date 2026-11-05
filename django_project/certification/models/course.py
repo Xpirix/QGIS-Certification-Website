@@ -83,8 +83,8 @@ class Course(models.Model):
         _('Open to external participants'),
         help_text=_(
             'Untick this if only your own students can join, for example a '
-            'university module. We then hide the course from the public lists '
-            'of courses.'),
+            'university module. We then show the course only to your '
+            'organisation and the certification team.'),
         default=True,
     )
 

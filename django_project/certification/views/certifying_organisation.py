@@ -6,6 +6,7 @@ from braces.views import LoginRequiredMixin, UserPassesTestMixin
 from certification.mixins import (
     ActiveCertifyingOrganisationRequiredMixin,
     ProtectedErrorMessageMixin,
+    courses_visible_to,
 )
 from certification.utilities import check_slug
 from django.conf import settings
@@ -41,7 +42,6 @@ from ..models import (
     CertifyingOrganisation,
     CertifyingOrganisationCertificate,
     Checklist,
-    Course,
     CourseAttendee,
     CourseConvener,
     CourseType,
@@ -220,8 +220,8 @@ class CertifyingOrganisationDetailContextMixin:
                 certifying_organisation=certifying_organisation
             ).prefetch_related("course_set")
             context["num_courseconvener"] = context["courseconveners"].count()
-            context["courses"] = Course.objects.filter(
-                certifying_organisation=certifying_organisation
+            context["courses"] = courses_visible_to(
+                request.user, certifying_organisation
             ).order_by("-start_date")
             context["num_course"] = context["courses"].count()
             context["attendee"] = CourseAttendee.objects.filter(

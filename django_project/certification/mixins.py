@@ -2,7 +2,7 @@ from certification.models import CertifyingOrganisation, Course, CourseConvener
 from django.contrib import messages
 from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.exceptions import PermissionDenied
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
 
@@ -44,6 +44,37 @@ def user_can_manage_organisation(
         or project.certification_managers.filter(pk=user.pk).exists()
         or user == project.owner
     )
+
+
+def courses_visible_to(
+    user: UserOrAnonymous,
+    certifying_organisation: CertifyingOrganisation,
+) -> QuerySet[Course]:
+    """Get the courses of an organisation that a user may see.
+
+    A course that is closed to external participants shows only to the
+    organisation's own people, its owners and course conveners, and to
+    whoever may manage the organisation.
+
+    :param user: The user looking at the courses.
+    :type user: User
+
+    :param certifying_organisation: The organisation running the courses.
+    :type certifying_organisation: CertifyingOrganisation
+
+    :returns: The courses this user may see.
+    :rtype: QuerySet
+    """
+
+    courses = Course.objects.filter(
+        certifying_organisation=certifying_organisation)
+    if user_can_manage_organisation(user, certifying_organisation):
+        return courses
+    if user.is_authenticated and CourseConvener.objects.filter(
+        certifying_organisation=certifying_organisation, user=user
+    ).exists():
+        return courses
+    return courses.filter(is_open=True)
 
 
 class ActiveCertifyingOrganisationRequiredMixin:
