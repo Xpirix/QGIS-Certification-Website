@@ -118,7 +118,6 @@ class TestTrainingCenterMapData(TestCase):
     def test_marker_carries_longitude_then_latitude(self) -> None:
         center = TrainingCenterF.create(
             certifying_organisation=self.organisation,
-            slug="antananarivo-centre",
             location=Point(x=47.5, y=-18.9, srid=4326),
         )
 
@@ -136,7 +135,7 @@ class TestTrainingCenterMapData(TestCase):
                 "trainingcenter-detail",
                 kwargs={
                     "organisation_slug": self.organisation.slug,
-                    "slug": "antananarivo-centre",
+                    "slug": center.slug,
                 },
             ),
         )
@@ -165,7 +164,6 @@ class TestMapContextInViews(TestCase):
         )
         self.center = TrainingCenterF.create(
             certifying_organisation=self.organisation,
-            slug="antananarivo-centre",
             location=Point(x=47.5, y=-18.9, srid=4326),
         )
 
