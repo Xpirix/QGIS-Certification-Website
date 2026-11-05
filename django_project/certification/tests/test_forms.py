@@ -128,12 +128,15 @@ class TestCourseForm(TestCase):
             certifying_organisation=self.certifying_organisation,
         )
 
+    def test_new_courses_start_open(self) -> None:
+        self.assertTrue(self.form()['is_open'].value())
+
     def test_modality_is_required(self) -> None:
         form = self.form(language='English')
         self.assertFalse(form.is_valid())
         self.assertIn('modality', form.errors)
 
-    def test_form_saves_the_modality(self) -> None:
+    def test_form_saves_modality_and_is_open(self) -> None:
         organisation = self.certifying_organisation
         form = self.form(
             course_type=CourseTypeF.create(
@@ -153,3 +156,4 @@ class TestCourseForm(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         course = form.save()
         self.assertEqual(course.modality, 'online')
+        self.assertFalse(course.is_open)

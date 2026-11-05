@@ -1,6 +1,8 @@
 # coding=utf-8
+import datetime
 import logging
 
+from certification.models import Course, CourseType
 from certification.tests.model_factories import (
     CertificateTypeF,
     CertifyingOrganisationF,
@@ -95,3 +97,51 @@ class TestCourseApiView(TestCase):
         response = self.client.get(reverse("feed-upcoming-project-course"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.course.name)
+
+    @override_settings(
+        VALID_DOMAIN=[
+            "testserver",
+        ]
+    )
+    def test_feeds_leave_out_closed_courses(self) -> None:
+        other_type = CourseTypeF.create(
+            certifying_organisation=self.certifying_organisation
+        )
+        today = datetime.date.today()
+        last_month = today - datetime.timedelta(days=30)
+        closed_upcoming = self.make_course(other_type, today, is_open=False)
+        closed_past = self.make_course(other_type, last_month, is_open=False)
+        open_past = self.make_course(self.course_type, last_month)
+
+        feeds = [
+            (reverse("feed-upcoming-project-course"), self.course, closed_upcoming),
+            (reverse("feed-past-project-course"), open_past, closed_past),
+            (
+                reverse(
+                    "feed-upcoming-course",
+                    kwargs={"organisation_slug": self.certifying_organisation.slug},
+                ),
+                self.course,
+                closed_upcoming,
+            ),
+        ]
+        for url, open_course, closed_course in feeds:
+            response = self.client.get(url)
+            self.assertContains(response, open_course.name)
+            self.assertNotContains(response, closed_course.name)
+
+    def make_course(
+        self,
+        course_type: CourseType,
+        start_date: datetime.date,
+        is_open: bool = True,
+    ) -> Course:
+        return CourseF.create(
+            certifying_organisation=self.certifying_organisation,
+            training_center=self.training_center,
+            course_convener=self.course_convener,
+            course_type=course_type,
+            start_date=start_date,
+            end_date=start_date + datetime.timedelta(days=1),
+            is_open=is_open,
+        )

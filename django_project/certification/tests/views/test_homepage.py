@@ -33,6 +33,16 @@ class TestHomepageCourses(TestCase):
         )
 
     @override_settings(VALID_DOMAIN=['testserver'])
+    def test_home_page_leaves_out_closed_courses(self) -> None:
+        self.make_course('Open workshop', is_open=True)
+        self.make_course('Closed module', is_open=False)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertContains(response, 'Open workshop')
+        self.assertNotContains(response, 'Closed module')
+
+    @override_settings(VALID_DOMAIN=['testserver'])
     def test_home_page_shows_the_modality(self) -> None:
         self.make_course('Open workshop', modality=Course.Modality.HYBRID)
 
@@ -43,6 +53,7 @@ class TestHomepageCourses(TestCase):
     def make_course(
         self,
         course_type_name: str,
+        is_open: bool = True,
         modality: str = '',
     ) -> Course:
         course_type = CourseTypeF.create(
@@ -57,5 +68,6 @@ class TestHomepageCourses(TestCase):
             course_type=course_type,
             start_date=next_week,
             end_date=next_week + datetime.timedelta(days=1),
+            is_open=is_open,
             modality=modality,
         )

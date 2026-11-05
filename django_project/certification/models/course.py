@@ -79,6 +79,15 @@ class Course(models.Model):
         default='',
     )
 
+    is_open = models.BooleanField(
+        _('Open to external participants'),
+        help_text=_(
+            'Untick this if only your own students can join, for example a '
+            'university module. We then hide the course from the public lists '
+            'of courses.'),
+        default=True,
+    )
+
     slug = models.CharField(
         max_length=400,
         blank=True,
@@ -185,3 +194,11 @@ class Course(models.Model):
             for certificate in self.certificate_set.all()
             if not certificate.is_revocable
         )
+
+
+def listed_courses() -> models.QuerySet[Course]:
+    """Courses we may list on the home page and in the course feeds.
+
+    A course that is closed to external participants stays out of both.
+    """
+    return Course.objects.filter(is_open=True)
