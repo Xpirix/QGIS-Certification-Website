@@ -67,3 +67,8 @@ class TestSerializer(TestCase):
     def test_course_type_link_is_null_without_a_link(self) -> None:
         properties = CourseSerializer(self.make_course()).data['properties']
         self.assertIsNone(properties['course_type_link'])
+
+    def test_modality(self) -> None:
+        course = self.make_course(modality=Course.Modality.ONLINE)
+        properties = CourseSerializer(course).data['properties']
+        self.assertEqual(properties['modality'], 'online')

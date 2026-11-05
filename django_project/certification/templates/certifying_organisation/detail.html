@@ -692,7 +692,12 @@
                             <tbody>
                                 {% for course in courses %}
                                     <tr>
-                                        <td>{{ course.course_type.name }}</td>
+                                        <td>
+                                            {{ course.course_type.name }}
+                                            {% if course.modality %}
+                                                <span class="tag is-light ml-2">{{ course.get_modality_display }}</span>
+                                            {% endif %}
+                                        </td>
                                         <td>{{ course.start_date }} to {{ course.end_date }}</td>
                                         <td>{{ course.training_center.name }}</td>
                                         <td>{{ course.language }}</td>

@@ -63,6 +63,22 @@ class Course(models.Model):
         default=datetime.date.today
     )
 
+    class Modality(models.TextChoices):
+        IN_PERSON = 'in_person', _('In person')
+        ONLINE = 'online', _('Online')
+        HYBRID = 'hybrid', _('Hybrid')
+
+    modality = models.CharField(
+        _('Modality'),
+        help_text=_(
+            'How people join this course. Hybrid means some join in person '
+            'and some join online.'),
+        max_length=20,
+        choices=Modality.choices,
+        blank=True,
+        default='',
+    )
+
     slug = models.CharField(
         max_length=400,
         blank=True,

@@ -49,6 +49,9 @@
             </span>
             <span>{{ course.training_center.name }}</span>
             </span>
+            {% if course.modality %}
+            <span class="tag is-info ml-2">{{ course.get_modality_display }}</span>
+            {% endif %}
             </p>
           <p>
           <span class="has-text-weight-medium">Trained competence(s):</span> {{ course.trained_competence|default:"-" }}

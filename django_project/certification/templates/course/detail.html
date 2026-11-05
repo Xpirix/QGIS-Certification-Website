@@ -92,6 +92,10 @@
                             <div class="column">{{ course.training_center }}</div>
                         </div>
                         <div class="columns">
+                            <div class="column is-4 has-text-weight-medium">Modality:</div>
+                            <div class="column">{{ course.get_modality_display|default:"Not set" }}</div>
+                        </div>
+                        <div class="columns">
                             <div class="column is-4 has-text-weight-medium">Organisation:</div>
                             <div class="column">
                                 {% if course.certifying_organisation.url %}

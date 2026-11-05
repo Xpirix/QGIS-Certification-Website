@@ -28,7 +28,8 @@ class CourseSerializer(GeoFeatureModelSerializer):
             'training_center_name',
             'certifying_organisation_name',
             'language',
-            'trained_competence'
+            'trained_competence',
+            'modality',
         ]
 
     def get_location(self, obj):

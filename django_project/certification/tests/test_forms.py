@@ -1,13 +1,14 @@
 from django.test import TestCase
 
 from base.tests.model_factories import ProjectF
-from certification.models import CertifyingOrganisation
+from certification.models import CertifyingOrganisation, Course
 from certification.tests.model_factories import (
-    CertifyingOrganisationF, StatusF
+    CertifyingOrganisationF, CourseConvenerF, CourseTypeF,
+    ProjectCertificateTypeF, StatusF, TrainingCenterF
 )
 from core.model_factories import UserF
 from certification.forms import (
-    CertifyingOrganisationForm, CourseConvenerForm
+    CertifyingOrganisationForm, CourseConvenerForm, CourseForm
 )
 
 
@@ -109,3 +110,46 @@ class TestUserPickerWidgets(TestCase):
         html = str(form['user'])
         self.assertNotIn('owner', html)
         self.assertNotIn('stranger', html)
+
+
+class TestCourseForm(TestCase):
+
+    def setUp(self) -> None:
+        self.user = UserF.create()
+        self.certifying_organisation = CertifyingOrganisationF.create(
+            project=ProjectF.create())
+        self.certificate_type = ProjectCertificateTypeF.create(
+            project=self.certifying_organisation.project).certificate_type
+
+    def form(self, **data: str | int) -> CourseForm:
+        return CourseForm(
+            data=data or None,
+            user=self.user,
+            certifying_organisation=self.certifying_organisation,
+        )
+
+    def test_modality_is_required(self) -> None:
+        form = self.form(language='English')
+        self.assertFalse(form.is_valid())
+        self.assertIn('modality', form.errors)
+
+    def test_form_saves_the_modality(self) -> None:
+        organisation = self.certifying_organisation
+        form = self.form(
+            course_type=CourseTypeF.create(
+                certifying_organisation=organisation).pk,
+            course_convener=CourseConvenerF.create(
+                certifying_organisation=organisation).pk,
+            training_center=TrainingCenterF.create(
+                certifying_organisation=organisation).pk,
+            modality=Course.Modality.ONLINE,
+            language='English',
+            trained_competence='Map making',
+            start_date='2026-12-01',
+            end_date='2026-12-02',
+            certifying_organisation=organisation.pk,
+            certificate_type=self.certificate_type.pk,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        course = form.save()
+        self.assertEqual(course.modality, 'online')
