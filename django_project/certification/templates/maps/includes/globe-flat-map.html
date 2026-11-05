@@ -1,0 +1,22 @@
+{% load static %}
+<div class="map-container map-container--{{ map_kind }}"
+     data-map="{{ map_kind }}"
+     data-map-data="map-data"
+     data-default-logo="{% static 'images/logosign.svg' %}"
+     role="region"
+     aria-label="{{ map_label }}">
+  <p class="map-status" role="status">Loading the map</p>
+  <div class="map-controls" role="group" aria-label="Map display">
+    <button type="button" class="map-view-toggle" data-view="globe"
+            title="Globe view" aria-label="Globe view" aria-pressed="false">
+      <i class="fas fa-globe" aria-hidden="true"></i>
+    </button>
+    <button type="button" class="map-view-toggle is-active" data-view="flat"
+            title="Flat map" aria-label="Flat map" aria-pressed="true">
+      <i class="fas fa-map" aria-hidden="true"></i>
+    </button>
+  </div>
+  <div class="map-globe-view" hidden></div>
+  <div class="map-flat-view"></div>
+</div>
+{{ map_data|json_script:"map-data" }}
