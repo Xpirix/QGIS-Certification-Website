@@ -4,6 +4,7 @@ from base.tests.model_factories import ProjectF
 from certification.tests.model_factories import (
     CertifyingOrganisationF, CourseConvenerF, CourseTypeF,
     ProjectCertificateTypeF, StatusF, TrainingCenterF, ChecklistF
+)
 from certification.models import (
     ORGANIZATION_OWNER, CertifyingOrganisation, Course, Checklist, OrganisationChecklist
 )
