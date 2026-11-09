@@ -11,6 +11,7 @@ from django.contrib.gis import gdal
 from django.contrib.gis.forms.widgets import BaseGeometryWidget
 from django.core.exceptions import ValidationError
 from django.contrib.gis.forms.widgets import OSMWidget
+from django.db.models import QuerySet
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import (
     Layout,
@@ -19,6 +20,7 @@ from crispy_forms.layout import (
     Field,
 )
 
+from .checklist_answers import answer_error, parse_checklist_answers
 from .models import (
     CertifyingOrganisation,
     CertificateType,
@@ -112,6 +114,13 @@ class CertifyingOrganisationForm(forms.ModelForm):
         self.project = kwargs.pop('project')
         form_title = kwargs.pop('form_title', None)
         show_owner_message = kwargs.pop('show_owner_message', None)
+        # The application template owns the form element so the checklist can
+        # sit inside it; every other page lets crispy render both.
+        owns_form_element = kwargs.pop('owns_form_element', False)
+        self.checklist_questions: QuerySet[Checklist] | None = (
+            kwargs.pop('checklist_questions', None)
+        )
+        self.checklist_errors: dict[str, str] = {}
         if not form_title:
             form_title = f'<h1>New Certifying Organisation for {self.project} </h1>'
         self.helper = FormHelper()
@@ -135,6 +144,7 @@ class CertifyingOrganisationForm(forms.ModelForm):
         )
         self.helper.layout = layout
         self.helper.html5_required = False
+        self.helper.form_tag = not owns_form_element
         super(CertifyingOrganisationForm, self).__init__(*args, **kwargs)
         self.fields['organisation_owners'].label_from_instance = \
             format_user_display
@@ -150,16 +160,43 @@ class CertifyingOrganisationForm(forms.ModelForm):
             self.fields['owner_message'].widget = (
                 forms.HiddenInput()
             )
-        self.helper.layout.append(
-            HTML(
-                '<button id="submit-id-submit" type="submit" class="button is-success mt-5" name="submit">'
-                '  <span class="icon"><i class="fas fa-check"></i></span>'
-                '  <span>Submit</span>'
-                '</button>'
+        if not owns_form_element:
+            self.helper.layout.append(
+                HTML(
+                    '<button id="submit-id-submit" type="submit" class="button is-success mt-5" name="submit">'
+                    '  <span class="icon"><i class="fas fa-check"></i></span>'
+                    '  <span>Submit</span>'
+                    '</button>'
+                )
             )
-        )
 
-    def save(self, commit=True):
+    def clean(self) -> dict:
+        """Check the answers to the checklist questions we offered.
+
+        The answers are not form fields, so they are read straight from the
+        posted data. Per question messages go into ``checklist_errors`` for
+        the template to render beside each question.
+        """
+
+        cleaned_data = super(CertifyingOrganisationForm, self).clean()
+        if self.checklist_questions is None:
+            return cleaned_data
+
+        answers = parse_checklist_answers(self.data)
+        for question in self.checklist_questions:
+            error = answer_error(question, answers.get(str(question.id), {}))
+            if error:
+                self.checklist_errors[str(question.id)] = error
+
+        if self.checklist_errors:
+            self.add_error(
+                None,
+                'Look at the questions below. Some answers need a change.'
+            )
+
+        return cleaned_data
+
+    def save(self, commit: bool = True) -> CertifyingOrganisation:
         instance = super(CertifyingOrganisationForm, self).save(commit=False)
 
         if (
@@ -174,53 +211,43 @@ class CertifyingOrganisationForm(forms.ModelForm):
         instance.save()
         self.save_m2m()
 
-        # Check checklist
-        checklist_data = {}
-        for key, value in self.data.items():
-            checklist_id = ''
-            if 'checklist-' in key:
-                checklist_id = key.split('-')[1]
-                if checklist_id not in checklist_data:
-                    checklist_data[checklist_id] = {}
-                checklist_data[checklist_id]['checked'] = (
-                    True if value == 'yes' else False
-                )
-            if 'textarea-' in key:
-                checklist_id = key.split('-')[1]
-                if checklist_id not in checklist_data:
-                    checklist_data[checklist_id] = {}
-                checklist_data[checklist_id]['text'] = (
-                    value
-                )
-            if checklist_id:
-                checklist = Checklist.objects.get(
-                    id=checklist_id
-                )
-                checklist_data[checklist_id]['question'] = (
-                    checklist.question
-                )
-        for key, value in checklist_data.items():
-            checklist = Checklist.objects.get(id=key)
-            organisation = CertifyingOrganisation.objects.get(
-                id=instance.id
-            )
+        self.save_checklist_answers(instance)
+
+        return instance
+
+    def save_checklist_answers(
+            self, organisation: CertifyingOrganisation) -> None:
+        """Store the answers to the questions we offered the applicant.
+
+        :param organisation: The organisation the answers belong to.
+        :type organisation: CertifyingOrganisation
+        """
+
+        if self.checklist_questions is None:
+            return
+
+        answers = parse_checklist_answers(self.data)
+        for question in self.checklist_questions:
+            answer = answers.get(str(question.id))
+            if not answer:
+                continue
+
             org_checklist, created = (
                 OrganisationChecklist.objects.get_or_create(
                     organisation=organisation,
-                    checklist=checklist
+                    checklist=question
                 )
             )
             if created:
                 org_checklist.submitter = self.user
-                org_checklist.checklist_question = value['question']
-                org_checklist.checklist_target = checklist.target
+                org_checklist.checklist_question = question.question
+                org_checklist.checklist_target = question.target
 
-            org_checklist.checked = value['checked']
-            if 'text' in value:
-                org_checklist.text_box_content = value['text']
+            if 'answer' in answer:
+                org_checklist.checked = answer['answer'] == 'yes'
+            if 'text' in answer:
+                org_checklist.text_box_content = answer['text']
             org_checklist.save()
-
-        return instance
 
 
 class CourseTypeForm(forms.ModelForm):
