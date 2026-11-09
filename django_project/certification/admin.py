@@ -180,7 +180,8 @@ class StatusAdmin(admin.ModelAdmin):
 
 
 class ChecklistAdmin(admin.ModelAdmin):
-    list_display = ('project', 'question', 'target', 'active')
+    list_display = ('project', 'question', 'target', 'active',
+                    'show_text_box', 'link_required')
 
 
 class OrganisationChecklistAdmin(admin.ModelAdmin):

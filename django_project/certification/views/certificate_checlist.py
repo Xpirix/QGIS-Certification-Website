@@ -16,6 +16,7 @@ class CertificateChecklistForm(forms.ModelForm):
         fields = (
             'question',
             'show_text_box',
+            'link_required',
             'help_text',
             'target',
             'project'

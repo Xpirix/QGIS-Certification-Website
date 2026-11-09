@@ -4,9 +4,17 @@ import base64
 import hashlib
 import hmac
 import requests
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any
+
 from django.conf import settings
 from django.contrib.gis.serializers.geojson import Serializer
+from django.urls import reverse
 from urllib.parse import urlencode, quote, quote_plus
+
+if TYPE_CHECKING:
+    from certification.models import CertifyingOrganisation, TrainingCenter
+    from django.contrib.gis.geos import GEOSGeometry
 
 
 def check_slug(queryset, slug):
@@ -48,6 +56,106 @@ class CustomSerializer(Serializer):
                 except AttributeError:
                     pass
         super(CustomSerializer, self).end_object(obj)
+
+
+# Organisations whose marker goes at their second located training centre.
+SECOND_CENTRE_ORGANISATIONS = {"qgis-qtibia-engineering"}
+
+
+def marker_location(
+    organisation: "CertifyingOrganisation", locations: list["GEOSGeometry"]
+) -> "GEOSGeometry | None":
+    """Pick where an organisation's marker goes on the world map.
+
+    :param organisation: The organisation.
+    :param locations: Locations of its training centres, oldest first.
+    :returns: The first location, the second one for the organisations in
+        ``SECOND_CENTRE_ORGANISATIONS`` when they have two, or None.
+    """
+    if not locations:
+        return None
+    if organisation.slug in SECOND_CENTRE_ORGANISATIONS and len(locations) > 1:
+        return locations[1]
+    return locations[0]
+
+
+def world_map_data(
+    organisations: Iterable["CertifyingOrganisation"],
+) -> dict[str, dict[str, Any]]:
+    """Group certifying organisations by country for the world map.
+
+    An organisation has no location of its own, so its marker goes at one
+    of its training centres, chosen by ``marker_location``. Without a located
+    training centre it has no marker.
+
+    :param organisations: Certifying organisations to place on the map.
+    :returns: Count, links and marker position per two letter ISO country code.
+    """
+    # Imported here because the models import this module.
+    from certification.models import TrainingCenter
+
+    organisations = list(organisations)
+    located: dict[int, list["GEOSGeometry"]] = {}
+    for centre in (
+        TrainingCenter.objects.filter(
+            certifying_organisation__in=organisations, location__isnull=False
+        )
+        .order_by("pk")
+        .only("certifying_organisation_id", "location")
+    ):
+        located.setdefault(centre.certifying_organisation_id, []).append(centre.location)
+
+    data: dict[str, dict[str, Any]] = {}
+    for organisation in organisations:
+        location = marker_location(organisation, located.get(organisation.pk, []))
+        entry = data.setdefault(
+            organisation.country.code, {"count": 0, "organisations": []}
+        )
+        entry["count"] += 1
+        entry["organisations"].append(
+            {
+                "name": organisation.name,
+                "url": organisation.get_absolute_url(),
+                "logo": organisation.logo.url if organisation.logo else None,
+                "website": organisation.url or None,
+                "slug": organisation.slug,
+                "lon": location.x if location else None,
+                "lat": location.y if location else None,
+            }
+        )
+    return data
+
+
+def training_center_map_data(
+    training_centers: Iterable["TrainingCenter"],
+    organisation: "CertifyingOrganisation",
+) -> dict[str, Any]:
+    """Describe the training centres of one organisation for its map.
+
+    :param training_centers: Training centres to mark. Those without a
+        location are left out.
+    :param organisation: The organisation running them.
+    :returns: The country, the organisation and one marker per centre.
+    """
+    return {
+        "country": organisation.country.code,
+        "organisation": organisation.name,
+        "logo": organisation.logo.url if organisation.logo else None,
+        "markers": [
+            {
+                "name": center.name,
+                "lon": center.location.x,
+                "lat": center.location.y,
+                "address": center.address,
+                "url": reverse(
+                    "trainingcenter-detail",
+                    kwargs={"organisation_slug": organisation.slug, "slug": center.slug},
+                ),
+            }
+            for center in training_centers
+            if center.location
+        ],
+    }
 
 
 class PayrexxService:

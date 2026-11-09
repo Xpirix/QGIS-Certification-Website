@@ -1,4 +1,7 @@
+from typing import Any
+
 from certification.views.certifying_organisation import CertifyingOrganisationListView
+from certification.utilities import world_map_data
 from django.utils.timezone import now
 from datetime import timedelta
 from certification.models.course import Course, listed_courses
@@ -21,9 +24,12 @@ class UpcomingCourseListView(ListView):
 class HomepageView(CertifyingOrganisationListView):
     template_name = 'layouts/homepage.html'
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Combine context from CertifyingOrganisationListView and UpcomingCourseListView."""
         context = super().get_context_data(**kwargs)
         upcoming_courses = UpcomingCourseListView().get_queryset()
         context['upcoming_courses'] = upcoming_courses
+        context['world_map'] = world_map_data(
+            self.get_queryset().filter(is_archived=False)
+        )
         return context

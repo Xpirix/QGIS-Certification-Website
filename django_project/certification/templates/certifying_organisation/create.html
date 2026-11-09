@@ -2,6 +2,8 @@
 {% load static %}
 {% load crispy_forms_tags %}
 
+{% block title %}Apply to become a certifying organisation{% endblock title %}
+
 {% block js_head %}
     <script type="text/javascript" src="/static/js/jsi18n.js"></script>
 {% endblock %}
@@ -9,10 +11,6 @@
 {% block css_head %}
     {{ form.media }}
 {% endblock css_head %}
-
-{% block page_title %}
-    <h1>Add Certifying Organisation</h1>
-{% endblock page_title %}
 
 {% block content %}
 
@@ -25,36 +23,78 @@
     </style>
     <section id="forms">
         <div class='box-content'>
-            {% csrf_token %}
-            {% crispy form %}
-            <div class="checklist-container">
-                {% for checklist in available_checklist %}
-                    <hr/>
-                    <div class="field">
-                        <label class="label">{{ checklist.question }}</label>
-                        <div class="control">
-                            <label class="form-check radio">
-                                <input type="radio" name="checklist-{{ checklist.id }}" id="yes-{{ checklist.id }}" value="yes">
-                                Yes
-                            </label>
-                            <label class=" form-check radio">
-                                <input type="radio" name="checklist-{{ checklist.id }}" id="no-{{ checklist.id }}" value="no">
-                                No
-                            </label>
+            <form id="application-form" method="post" enctype="multipart/form-data" novalidate>
+                {% csrf_token %}
+                <div id="application-fields">
+                    {% crispy form %}
+
+                    {% if available_checklist %}
+                        <div class="checklist-container">
+                            {% for checklist in available_checklist %}
+                                <div class="checklist-question" data-question="{{ checklist.id }}">
+                                    <hr/>
+                                    <div class="field">
+                                        <label class="label" id="question-{{ checklist.id }}">{{ checklist.question }}</label>
+                                        <div class="control" role="radiogroup" aria-labelledby="question-{{ checklist.id }}">
+                                            <label class="form-check radio">
+                                                <input type="radio" name="checklist-{{ checklist.id }}" id="yes-{{ checklist.id }}" value="yes"{% if checklist.answer == 'yes' %} checked{% endif %}>
+                                                Yes
+                                            </label>
+                                            <label class="form-check radio">
+                                                <input type="radio" name="checklist-{{ checklist.id }}" id="no-{{ checklist.id }}" value="no"{% if checklist.answer == 'no' %} checked{% endif %}>
+                                                No
+                                            </label>
+                                        </div>
+                                    </div>
+                                    {% if checklist.show_text_box %}
+                                        <div class="field checklist-details{% if checklist.answer != 'yes' %} is-hidden{% endif %}">
+                                            <label class="label" for="textarea-{{ checklist.id }}">
+                                                Details
+                                                <span class="asterisk">*</span>
+                                            </label>
+                                            <div class="control">
+                                                <textarea class="textarea" id="textarea-{{ checklist.id }}"
+                                                          name="textarea-{{ checklist.id }}" rows="3"
+                                                          placeholder="{{ checklist.hint }}">{{ checklist.text }}</textarea>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                    {% if checklist.error %}
+                                        <p class="help is-danger" role="alert">{{ checklist.error }}</p>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
                         </div>
+                    {% endif %}
+
+                    <div class="buttons">
+                        <button id="review-application" type="button" class="button is-success mt-5">
+                            <span class="icon"><i class="fas fa-eye"></i></span>
+                            <span>Review your application</span>
+                        </button>
                     </div>
-                    {% if checklist.show_text_box %}
-                        <div class="field">
-                            <div class="control">
-                                <textarea class="textarea" name="textarea-{{ checklist.id }}" rows="3"></textarea>
-                            </div>
-                        </div>
-                    {% endif %}
-                    {% if checklist.help_text %}
-                        <p class="help">{{ checklist.help_text }}</p>
-                    {% endif %}
-                {% endfor %}
-            </div>
+                </div>
+
+                <div id="application-review" class="is-hidden" tabindex="-1">
+                    <h2 class="title is-4">Check your application</h2>
+                    <hr/>
+                    <h3 class="title is-5">Organisation</h3>
+                    <div class="content" id="review-organisation"></div>
+                    <hr/>
+                    <h3 class="title is-5">Checklist</h3>
+                    <div class="content" id="review-checklist"></div>
+                    <div class="buttons is-right mt-5">
+                        <button type="submit" name="submit" class="button is-success">
+                            <span class="icon"><i class="fas fa-paper-plane"></i></span>
+                            <span>Send application</span>
+                        </button>
+                        <button id="edit-application" type="button" class="button is-light">
+                            <span class="icon"><i class="fas fa-arrow-left"></i></span>
+                            <span>Back to edit</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
             {% for form in inlines %}
                 {% crispy form %}
             {% endfor %}
@@ -62,37 +102,139 @@
     </section>
 
     <script>
-        let availableChecklistLength = {{ available_checklist | length }};
-        let checklistAvailable = availableChecklistLength > 0;
         $(function () {
-            $('#project-form').after($('.checklist-container'));
-            if (checklistAvailable) {
-                $('#submit-id-submit').attr('disabled', 'disabled');
-                console.log('Checklist available');
-            }
-            $('.form-check').change(() => {
-                let allChecked = [];
-                $('.checklist-container :radio:checked').each(function(){
-                   allChecked.push($(this).val());
-                });
-                console.log(allChecked.length, availableChecklistLength);
-                if (allChecked.length === availableChecklistLength) {
-                    $('#submit-id-submit').attr('disabled', false);
-                }
-            })
-        });
-        $('legend').each(function() {
-            var div = $('<div>');
-            div.html('<a href="https://qgis.org/community/certification/" target="_blank" class="icon button is-light" title="About"><i class="fas fa-info-circle"></i></a>');
-            $(this).append(div);
-        });
+            const form = $('#application-form');
+            const fields = $('#application-fields');
+            const review = $('#application-review');
+            const reviewButton = $('#review-application');
+            const questions = $('.checklist-question');
 
-        var nameDiv = $('#div_id_name');
-        if (nameDiv.length) {
-            var infoText = $('<div>', { class: 'notification is-primary3 is-light' });
-            infoText.html('Click the <span class="icon"><i class="fas fa-info-circle"></i></span> icon for details on how the certification programme works.');
-            nameDiv.prepend(infoText);
-        }
+            function detailsBox($question) {
+                return $question.find('.checklist-details textarea');
+            }
+
+            function labelText($label) {
+                return $.trim(
+                    $label.clone().children().remove().end().text()
+                );
+            }
+
+            function showDetailsForYesAnswers() {
+                questions.each(function () {
+                    const $question = $(this);
+                    const answer = $question.find('input[type=radio]:checked').val();
+                    $question.find('.checklist-details')
+                        .toggleClass('is-hidden', answer !== 'yes');
+                    detailsBox($question).attr(
+                        'aria-required', answer === 'yes' ? 'true' : null
+                    );
+                });
+            }
+
+            function reviewRow(label, value) {
+                const row = $('<div class="columns">');
+                $('<div class="column is-two-thirds has-text-weight-medium">')
+                    .text(label)
+                    .appendTo(row);
+                $('<div class="column">').text(value || '-').appendTo(row);
+                return row;
+            }
+
+            function controlLabel(control) {
+                const byFor = fields
+                    .find('label[for="' + control.id + '"]')
+                    .first();
+                if (byFor.length) {
+                    return labelText(byFor);
+                }
+                return labelText(
+                    $(control).closest('.field').find('label').first()
+                );
+            }
+
+            function controlValue(control) {
+                const $control = $(control);
+                if (control.type === 'file') {
+                    return control.files.length ? control.files[0].name : '';
+                }
+                if ($control.is('select')) {
+                    return $control.find('option:selected').map(function () {
+                        return $.trim($(this).text());
+                    }).get().join(', ');
+                }
+                return $control.val();
+            }
+
+            function isApplicationField(control) {
+                const name = control.name || '';
+                return name &&
+                    control.type !== 'hidden' &&
+                    name !== 'csrfmiddlewaretoken' &&
+                    name.indexOf('checklist-') !== 0 &&
+                    name.indexOf('textarea-') !== 0;
+            }
+
+            function buildReview() {
+                const organisation = $('#review-organisation').empty();
+                fields.find('input, select, textarea').each(function () {
+                    if (!isApplicationField(this)) {
+                        return;
+                    }
+                    const label = controlLabel(this);
+                    if (label) {
+                        organisation.append(reviewRow(label, controlValue(this)));
+                    }
+                });
+
+                const checklist = $('#review-checklist').empty();
+                questions.each(function () {
+                    const $question = $(this);
+                    const answer = $question.find('input[type=radio]:checked').val();
+                    checklist.append(reviewRow(
+                        labelText($question.find('label.label').first()),
+                        answer?.replace(/\b\w/g, s => s.toUpperCase())
+                    ));
+                    const box = detailsBox($question);
+                    const text = box.length ? $.trim(box.val()) : '';
+                    if (answer === 'yes' && text) {
+                        checklist.append($('<p class="mb-5">').text(text));
+                    }
+                });
+            }
+
+            reviewButton.on('click', function () {
+                buildReview();
+                fields.addClass('is-hidden');
+                review.removeClass('is-hidden').trigger('focus');
+                window.scrollTo(0, 0);
+            });
+
+            $('#edit-application').on('click', function () {
+                review.addClass('is-hidden');
+                fields.removeClass('is-hidden');
+                window.scrollTo(0, 0);
+            });
+
+            form.on(
+                'change',
+                '.checklist-question input[type=radio]',
+                showDetailsForYesAnswers
+            );
+            showDetailsForYesAnswers();
+
+            $('legend').each(function () {
+                const about = $('<div>');
+                about.html('<a href="https://qgis.org/community/certification/" target="_blank" class="icon button is-light" title="About"><i class="fas fa-info-circle"></i></a>');
+                $(this).append(about);
+            });
+
+            const nameDiv = $('#div_id_name');
+            if (nameDiv.length) {
+                const infoText = $('<div>', { class: 'notification is-primary3 is-light' });
+                infoText.html('Click the <span class="icon"><i class="fas fa-info-circle"></i></span> icon for details on how the certification programme works.');
+                nameDiv.prepend(infoText);
+            }
+        });
     </script>
 
 {% endblock %}

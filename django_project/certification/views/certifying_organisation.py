@@ -1,22 +1,30 @@
 # coding=utf-8
 import ast
+from typing import Any
 
 from base.models import Project
 from braces.views import LoginRequiredMixin, UserPassesTestMixin
 from certification.mixins import (
     ActiveCertifyingOrganisationRequiredMixin,
     ProtectedErrorMessageMixin,
+    user_can_manage_organisation,
 )
-from certification.utilities import check_slug
+from certification.utilities import check_slug, training_center_map_data
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.sessions.models import Session
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Lower
-from django.http import Http404, HttpResponse, HttpResponseRedirect, request
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseRedirect,
+    request,
+)
 from django.shortcuts import get_list_or_404, get_object_or_404, render
 from django.urls import reverse
 from django.utils.html import escape
@@ -34,6 +42,7 @@ from django_renderpdf.views import PDFView
 from pure_pagination.mixins import PaginationMixin
 from rest_framework.views import APIView
 
+from ..checklist_answers import parse_checklist_answers, shows_evidence
 from ..forms import CertifyingOrganisationForm
 from ..models import (
     ORGANIZATION_OWNER,
@@ -188,8 +197,8 @@ class CertifyingOrganisationDetailContextMixin:
     """
 
     def get_certifying_organisation_detail_context(
-        self, certifying_organisation, request
-    ):
+        self, certifying_organisation: CertifyingOrganisation, request: HttpRequest
+    ) -> dict[str, Any]:
         context = {}
         project_slug = "qgis"
         session_key = request.GET.get("s", None)
@@ -212,6 +221,9 @@ class CertifyingOrganisationDetailContextMixin:
                 certifying_organisation=certifying_organisation
             )
             context["num_trainingcenter"] = context["trainingcenters"].count()
+            context["site_map"] = training_center_map_data(
+                context["trainingcenters"], certifying_organisation
+            )
             context["coursetypes"] = CourseType.objects.filter(
                 certifying_organisation=certifying_organisation
             )
@@ -756,14 +768,16 @@ class CertifyingOrganisationCreateView(
         """Define the redirect URL.
 
          After successful creation of the object, the User will be redirected
-         to the unapproved Certifying Organisation list page
-         for the object's parent Project.
+         to the application outcome page for the object.
 
         :returns: URL
         :rtype: HttpResponse
         """
 
-        return reverse("certifyingorganisation-list", kwargs={})
+        return reverse(
+            "certifyingorganisation-application-outcome",
+            kwargs={"slug": self.object.slug},
+        )
 
     def get_context_data(self, **kwargs):
         """Get the context data which is passed to a template.
@@ -782,13 +796,44 @@ class CertifyingOrganisationCreateView(
             project=self.project
         )
         context["the_project"] = self.project
+        form = context["form"]
         context["available_checklist"] = ChecklistSerializer(
-            Checklist.objects.filter(
-                project=context["the_project"], target=ORGANIZATION_OWNER, active=True
-            ),
+            form.checklist_questions,
             many=True,
         ).data
+        answers = parse_checklist_answers(form.data) if form.is_bound else {}
+        for entry in context["available_checklist"]:
+            answer = answers.get(str(entry["id"]), {})
+            entry["answer"] = answer.get("answer", "")
+            entry["text"] = answer.get("text", "")
+            entry["error"] = form.checklist_errors.get(str(entry["id"]), "")
+            entry["hint"] = self.get_checklist_hint(entry)
         return context
+
+    def get_checklist_hint(self, question: dict) -> str:
+        """Say what we want in a question's text box.
+
+        This becomes the text box placeholder. A manager can write it when
+        they add the question. When they have not, it follows from whether a
+        link is required.
+
+        :param question: One serialised checklist question.
+        :type question: dict
+
+        :returns: The placeholder for the question's text box.
+        :rtype: str
+        """
+
+        if question["help_text"]:
+            return question["help_text"]
+        if not question["show_text_box"]:
+            return ""
+        if question["link_required"]:
+            return (
+                "Tell us what you did and add at least one link, "
+                "starting with http:// or https://."
+            )
+        return "A sentence or two is enough."
 
     def form_valid(self, form):
         """Save new created Certifying Organisation
@@ -799,7 +844,19 @@ class CertifyingOrganisationCreateView(
         :returns HttpResponseRedirect object to success_url
         :rtype: HttpResponseRedirect
 
-        We check that there is no referential integrity error when saving."""
+        An application whose checklist shows no evidence of contributions is
+        not saved. We check that there is no referential integrity error when
+        saving."""
+
+        answers = parse_checklist_answers(form.data)
+        questions = form.checklist_questions
+        # With no active questions there is nothing to show evidence for.
+        if questions and not shows_evidence(questions, answers):
+            return HttpResponseRedirect(
+                reverse(
+                    "certifyingorganisation-application-outcome", kwargs={}
+                )
+            )
 
         try:
             super(CertifyingOrganisationCreateView, self).form_valid(form)
@@ -895,8 +952,54 @@ class CertifyingOrganisationCreateView(
         kwargs = super(CertifyingOrganisationCreateView, self).get_form_kwargs()
         self.project_slug = "qgis"
         self.project = Project.objects.get(slug=self.project_slug)
-        kwargs.update({"user": self.request.user, "project": self.project})
+        kwargs.update(
+            {
+                "user": self.request.user,
+                "project": self.project,
+                "owns_form_element": True,
+                "checklist_questions": Checklist.objects.filter(
+                    project=self.project, target=ORGANIZATION_OWNER, active=True
+                ),
+            }
+        )
         return kwargs
+
+
+class CertifyingOrganisationApplicationOutcomeView(
+    LoginRequiredMixin, TemplateView
+):
+    """Tell the applicant what became of their application.
+
+    One page for both outcomes. With a slug the application was accepted and
+    the page names the organisation; without one the checklist showed no
+    evidence of contributions and nothing was created.
+    """
+
+    template_name = "certifying_organisation/application-outcome.html"
+
+    def get_context_data(self, **kwargs) -> dict:
+        """Add the organisation when the application was accepted.
+
+        :returns: Context data which will be passed to the template.
+        :rtype: dict
+        """
+
+        context = super(
+            CertifyingOrganisationApplicationOutcomeView, self
+        ).get_context_data(**kwargs)
+        slug = self.kwargs.get("slug")
+        if not slug:
+            return context
+
+        organisation = get_object_or_404(CertifyingOrganisation, slug=slug)
+        # A typed URL has no list row to hide it, so the rule the list
+        # applies is applied here too.
+        if not user_can_manage_organisation(self.request.user, organisation):
+            raise PermissionDenied(
+                "You do not have permission to view this application."
+            )
+        context["certifyingorganisation"] = organisation
+        return context
 
 
 # noinspection PyAttributeOutsideInit

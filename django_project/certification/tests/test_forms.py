@@ -1,10 +1,11 @@
 from django.test import TestCase
 
 from base.tests.model_factories import ProjectF
-from certification.models import CertifyingOrganisation, Course
 from certification.tests.model_factories import (
     CertifyingOrganisationF, CourseConvenerF, CourseTypeF,
-    ProjectCertificateTypeF, StatusF, TrainingCenterF
+    ProjectCertificateTypeF, StatusF, TrainingCenterF, ChecklistF
+from certification.models import (
+    ORGANIZATION_OWNER, CertifyingOrganisation, Course, Checklist, OrganisationChecklist
 )
 from core.model_factories import UserF
 from certification.forms import (
@@ -157,3 +158,186 @@ class TestCourseForm(TestCase):
         course = form.save()
         self.assertEqual(course.modality, 'online')
         self.assertFalse(course.is_open)
+
+class TestCertifyingOrganisationChecklist(TestCase):
+    """The applicant checklist is answered in full, with links where asked."""
+
+    def setUp(self):
+        self.user = UserF.create(username='applicant')
+        self.project = ProjectF.create()
+        self.question = ChecklistF.create(
+            project=self.project,
+            target=ORGANIZATION_OWNER,
+            active=True,
+            show_text_box=True,
+            link_required=True
+        )
+
+    def questions(self):
+        return Checklist.objects.filter(
+            project=self.project,
+            target=ORGANIZATION_OWNER,
+            active=True
+        )
+
+    def build_form(self, answers, questions=None):
+        data = {
+            'name': 'New organisation',
+            'organisation_email': 'test@test.com',
+            'address': 'Address',
+            'organisation_phone': '12121212',
+            'organisation_owners': [self.user.id],
+            'project': self.project.id
+        }
+        data.update(answers)
+        return CertifyingOrganisationForm(
+            user=self.user,
+            project=self.project,
+            checklist_questions=questions,
+            data=data
+        )
+
+    def test_yes_needs_the_text_box_filled(self):
+        form = self.build_form(
+            {
+                f'checklist-{self.question.id}': 'yes',
+                f'textarea-{self.question.id}': ''
+            },
+            questions=self.questions()
+        )
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.checklist_errors[str(self.question.id)],
+            'Tell us what you did.'
+        )
+        self.assertIn(
+            'Look at the questions below.',
+            form.non_field_errors()[0]
+        )
+
+    def test_yes_needs_links_rather_than_prose(self):
+        form = self.build_form(
+            {
+                f'checklist-{self.question.id}': 'yes',
+                f'textarea-{self.question.id}': 'I wrote some documentation'
+            },
+            questions=self.questions()
+        )
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.checklist_errors[str(self.question.id)],
+            'Add at least one URL.'
+        )
+
+    def test_yes_with_links_is_accepted_and_stored(self):
+        links = (
+            'https://github.com/qgis/QGIS/pull/1\n'
+            'http://docs.qgis.org/latest/en/docs/'
+        )
+        form = self.build_form(
+            {
+                f'checklist-{self.question.id}': 'yes',
+                f'textarea-{self.question.id}': links
+            },
+            questions=self.questions()
+        )
+        self.assertTrue(form.is_valid())
+        organisation = form.save()
+
+        answer = OrganisationChecklist.objects.get(
+            organisation=organisation,
+            checklist=self.question
+        )
+        self.assertTrue(answer.checked)
+        self.assertEqual(answer.text_box_content, links)
+        self.assertEqual(answer.submitter, self.user)
+        self.assertEqual(answer.checklist_question, self.question.question)
+
+    def test_no_does_not_need_the_text_box(self):
+        form = self.build_form(
+            {
+                f'checklist-{self.question.id}': 'no',
+                f'textarea-{self.question.id}': ''
+            },
+            questions=self.questions()
+        )
+        self.assertTrue(form.is_valid())
+        organisation = form.save()
+        self.assertFalse(
+            OrganisationChecklist.objects.get(
+                organisation=organisation,
+                checklist=self.question
+            ).checked
+        )
+
+    def test_a_question_without_a_text_box_needs_no_links(self):
+        plain_question = ChecklistF.create(
+            project=self.project,
+            target=ORGANIZATION_OWNER,
+            active=True,
+            show_text_box=False
+        )
+        form = self.build_form(
+            {
+                f'checklist-{self.question.id}': 'no',
+                f'checklist-{plain_question.id}': 'yes'
+            },
+            questions=self.questions()
+        )
+        self.assertTrue(form.is_valid())
+
+    def test_an_unanswered_question_is_rejected(self):
+        form = self.build_form({}, questions=self.questions())
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.checklist_errors[str(self.question.id)],
+            'Answer yes or no.'
+        )
+
+    def test_an_answer_we_did_not_ask_for_is_ignored(self):
+        form = self.build_form(
+            {
+                f'checklist-{self.question.id}': 'no',
+                'checklist-999999': 'yes',
+                'checklist-not-a-number': 'yes'
+            },
+            questions=self.questions()
+        )
+        self.assertTrue(form.is_valid())
+        organisation = form.save()
+        self.assertEqual(
+            OrganisationChecklist.objects.filter(
+                organisation=organisation
+            ).count(),
+            1
+        )
+
+    def test_a_form_without_questions_skips_the_checklist(self):
+        form = self.build_form({})
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.checklist_errors, {})
+
+    def test_yes_accepts_a_link_inside_prose(self):
+        form = self.build_form(
+            {
+                f'checklist-{self.question.id}': 'yes',
+                f'textarea-{self.question.id}': (
+                    'We rewrote the install guide, see '
+                    'https://docs.qgis.org/latest/en/docs/ for the result.'
+                )
+            },
+            questions=self.questions()
+        )
+        self.assertTrue(form.is_valid())
+
+    def test_a_question_that_wants_no_link_accepts_prose(self):
+        self.question.link_required = False
+        self.question.save()
+        form = self.build_form(
+            {
+                f'checklist-{self.question.id}': 'yes',
+                f'textarea-{self.question.id}': 'We ran a training course'
+            },
+            questions=self.questions()
+        )
+        self.assertTrue(form.is_valid())
