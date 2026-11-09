@@ -2,10 +2,12 @@ require("../style/scss/style.scss");
 
 import 'datatables.net';
 import 'datatables.net-dt';
-import 'leaflet';
-import 'leaflet/dist/leaflet.css';
 
 document.addEventListener("DOMContentLoaded", () => {
+  if (document.querySelector("[data-map]")) {
+    import("./maps").then((maps) => maps.boot());
+  }
+
   // Get all "navbar-burger" elements
   const $navbarBurgers = Array.prototype.slice.call(
     document.querySelectorAll(".navbar-burger"),

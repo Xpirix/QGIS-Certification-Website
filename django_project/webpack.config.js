@@ -16,9 +16,6 @@ let plugins = [
     jQuery: 'jquery',
     'window.jQuery': 'jquery',
   }),
-  new webpack.ProvidePlugin({
-    Leaflet: 'leaflet',
-  }),
 ];
 
 if (mode === 'development') {
@@ -33,7 +30,6 @@ const exposeLibraries = [
   { name: 'jquery', exposes: ['$', 'jQuery'] },
   { name: 'datatables.net', exposes: ['DataTable'] },
   { name: 'moment', exposes: ['moment'] },
-  { name: 'leaflet', exposes: ['Leaflet'] },
 ];
 
 module.exports = {

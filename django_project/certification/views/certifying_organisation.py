@@ -1,5 +1,6 @@
 # coding=utf-8
 import ast
+from typing import Any
 
 from base.models import Project
 from braces.views import LoginRequiredMixin, UserPassesTestMixin
@@ -8,7 +9,7 @@ from certification.mixins import (
     ProtectedErrorMessageMixin,
     user_can_manage_organisation,
 )
-from certification.utilities import check_slug
+from certification.utilities import check_slug, training_center_map_data
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.sessions.models import Session
@@ -17,7 +18,13 @@ from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Lower
-from django.http import Http404, HttpResponse, HttpResponseRedirect, request
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseRedirect,
+    request,
+)
 from django.shortcuts import get_list_or_404, get_object_or_404, render
 from django.urls import reverse
 from django.utils.html import escape
@@ -190,8 +197,8 @@ class CertifyingOrganisationDetailContextMixin:
     """
 
     def get_certifying_organisation_detail_context(
-        self, certifying_organisation, request
-    ):
+        self, certifying_organisation: CertifyingOrganisation, request: HttpRequest
+    ) -> dict[str, Any]:
         context = {}
         project_slug = "qgis"
         session_key = request.GET.get("s", None)
@@ -214,6 +221,9 @@ class CertifyingOrganisationDetailContextMixin:
                 certifying_organisation=certifying_organisation
             )
             context["num_trainingcenter"] = context["trainingcenters"].count()
+            context["site_map"] = training_center_map_data(
+                context["trainingcenters"], certifying_organisation
+            )
             context["coursetypes"] = CourseType.objects.filter(
                 certifying_organisation=certifying_organisation
             )
