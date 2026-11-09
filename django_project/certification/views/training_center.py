@@ -1,4 +1,6 @@
 # coding=utf-8
+from typing import Any
+
 from base.models import Project
 from braces.views import LoginRequiredMixin
 from certification.mixins import (
@@ -6,6 +8,7 @@ from certification.mixins import (
     OrganisationEditPermissionMixin,
     ProtectedErrorMessageMixin,
 )
+from certification.utilities import training_center_map_data
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import Http404, HttpResponseRedirect
@@ -115,7 +118,7 @@ class TrainingCenterDetailView(
     context_object_name = "trainingcenter"
     template_name = "training_center/detail.html"
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Get the context data which is passed to a template.
 
         :param kwargs: Any arguments to pass to the superclass.
@@ -132,6 +135,9 @@ class TrainingCenterDetailView(
         context = super(TrainingCenterDetailView, self).get_context_data(**kwargs)
         context["trainingcenters"] = TrainingCenter.objects.filter(
             certifying_organisation=self.certifying_organisation
+        )
+        context["site_map"] = training_center_map_data(
+            [self.object], self.certifying_organisation
         )
         project_slug = "qgis"
         context["project_slug"] = project_slug

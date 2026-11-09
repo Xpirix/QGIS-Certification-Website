@@ -177,6 +177,7 @@
                                 <div class="column">
                                     {{ checklist_row.question }}
                                     <span class="help-text">{% if checklist_row.help_text %}{{ checklist_row.help_text }}{% endif %}</span>
+                                    {% if checklist_row.link_required %}<span class="tag is-info is-light">Needs a link</span>{% endif %}
                                 </div>
                                 <div class="column is-narrow">
                                     {% if checklist_row.active %}
@@ -199,6 +200,7 @@
                                 <div class="column">
                                     {{ checklist_row.question }}
                                     <span class="help-text">{% if checklist_row.help_text %}{{ checklist_row.help_text }}{% endif %}</span>
+                                    {% if checklist_row.link_required %}<span class="tag is-info is-light">Needs a link</span>{% endif %}
                                 </div>
                                 <div class="column is-narrow">
                                     {% if checklist_row.active %}

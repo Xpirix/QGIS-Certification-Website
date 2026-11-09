@@ -1,0 +1,52 @@
+{% extends "base_with_sidebar.html" %}
+
+{% block title %}
+    {% if certifyingorganisation %}
+        Application submitted
+    {% else %}
+        Application not accepted
+    {% endif %}
+{% endblock title %}
+
+{% block content %}
+    {% if certifyingorganisation %}
+        <h1 class="title">Application submitted</h1>
+        <div class="box-content">
+            <div class="notification is-success is-light">
+                <p>
+                    Thanks for applying as
+                    <strong>{{ certifyingorganisation.name }}</strong>.
+                </p>
+            </div>
+            <p>
+                Your application has been successfully submitted 
+                and is now being reviewed. You will receive an email 
+                once the review is complete.
+            </p>
+            <div class="buttons is-right">
+                <a class="button is-success"
+                   href='{% url "certifyingorganisation-detail" certifyingorganisation.slug %}'
+                   title="See {{ certifyingorganisation.name }}">
+                    <span class="icon"><i class="fas fa-building"></i></span>
+                    <span>See your application</span>
+                </a>
+            </div>
+        </div>
+    {% else %}
+        <h1 class="title">Application not accepted</h1>
+        <div class="box-content">
+            <div class="notification is-danger is-light">
+                <p>
+                    There was no evidence of contributions and no links
+                    provided. We recommend that the organisation focus on
+                    making some contributions to QGIS.org and reapply once
+                    that has been done.
+                </p>
+            </div>
+            <p>
+                If you have questions you are free to contact us at
+                <a href="mailto:certification@qgis.org">certification@qgis.org</a>
+            </p>
+        </div>
+    {% endif %}
+{% endblock %}

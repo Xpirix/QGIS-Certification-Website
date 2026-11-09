@@ -12,93 +12,6 @@
     <h1>Certifying Organisation (all)</h1>
 {% endblock page_title %}
 
-{% block js_head %}
-    <script>
-        var map;
-        var lat;
-        var long;
-
-
-        $(document).ready(function () {
-             $.getJSON('{{ STATIC_URL }}/static/json/geo.json', function (json) {
-                // Get geo json object with the same country code from certifying organisation
-                var geo_obj = $.grep(json['features'], function (e) {
-                        return e.properties.ISO2 == '{{ certifyingorganisation.country }}';
-                    });
-
-                // Put marker of the country on the map
-                lat = geo_obj[0].properties.LAT;
-                long = geo_obj[0].properties.LON;
-
-                // Add map
-                $('#map').css({'height': 400, 'width': "100%"});
-
-
-                const worldBounds = Leaflet.latLngBounds(
-                    Leaflet.latLng(-90, -180),  // south-west
-                    Leaflet.latLng(90, 180)     // north-east
-                );
-
-                map = Leaflet.map('map', {
-                    maxBounds: worldBounds,
-                    maxBoundsViscosity: 1.0,  // 1.0 = hard lock, won't pan outside at all
-                    minZoom: 2,
-                }).setView([lat, long], 4);
-                const RefererTileLayer = Leaflet.TileLayer.extend({
-                createTile(coords, done) {
-                    const tile = document.createElement('img');
-                    tile.referrerPolicy = 'origin';
-                    tile.onload = () => done(null, tile);
-                    tile.onerror = (e) => done(e, tile);
-                    tile.src = this.getTileUrl(coords);
-                    return tile;
-                }
-                });
-
-                new RefererTileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
-                attribution:  '&copy; <a href="http://www.openstreetmap.org/copyright">'+
-                                'OpenStreetMap</a>, Tiles courtesy of '+
-                                '<a href="http://hot.openstreetmap.org/" target="_blank">'+
-                                'Humanitarian OpenStreetMap Team</a>',
-                opacity: 0.75,
-                }).addTo(map);
-
-                addMarkers();
-                addLegend();
-             });
-
-            function addMarkers() {
-            var green_icon = Leaflet.icon({
-                            iconUrl: '/static/img/marker_green.png',
-                            iconSize:     [30, 40],
-                            iconAnchor:   [14, 39],
-                            popupAnchor:  [0, -30]
-                        });
-
-            {% for training_center in trainingcenters %}
-                var marker = Leaflet.marker(
-                   [{{ training_center.location.y }}, {{ training_center.location.x }}],{
-                        icon: green_icon
-                    }
-               ).addTo(map).bindPopup('{{ training_center.name }}');
-            {% endfor %}
-            }
-
-            function addLegend() {
-                var legend = Leaflet.control({position: 'bottomleft'});
-                legend.onAdd = function (map) {
-                    var div = Leaflet.DomUtil.create('div', 'info legend');
-                    div.innerHTML = '<img src="/static/img/marker_green.png" height=20px><span> Training center</span>';
-                return div;
-                };
-                legend.addTo(map);
-            }
-
-        });
-
-    </script>
-{% endblock %}
-
 {% block content %}
     <style>
         .about-link:hover {
@@ -767,9 +680,9 @@
             </header>
             <div class="card-content">
                 <div class="content">
-                    <div class="map-wrapper" style="horiz-align: center;">
-                        <div id="map"></div>
-                    </div>
+                    {% if site_map %}
+                        {% include "maps/includes/globe-flat-map.html" with map_kind="site" map_data=site_map map_label="Map of training centres" %}
+                    {% endif %}
                     {% if num_trainingcenter == 0 %}
                         <div class="notification is-warning is-light mt-3">
                             <p>No training centers are defined, but you can

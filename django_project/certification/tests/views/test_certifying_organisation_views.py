@@ -2,7 +2,12 @@
 import logging
 from io import StringIO
 
-from certification.models import ORGANIZATION_OWNER, REVIEWER, OrganisationChecklist
+from certification.models import (
+    ORGANIZATION_OWNER,
+    REVIEWER,
+    CertifyingOrganisation,
+    OrganisationChecklist,
+)
 from certification.tests.model_factories import (
     CertifyingOrganisationF,
     ChecklistF,
@@ -213,6 +218,21 @@ class TestCertifyingOrganisationView(TestCase):
         self.assertEqual(response.context_data["the_project"], self.project)
         self.assertEqual(response.status_code, 200)
 
+    def application_post_data(self, name, **answers):
+        """Build a complete application post, with the checklist answers."""
+
+        post_data = {
+            "name": name,
+            "organisation_email": "org@test.com",
+            "address": "city",
+            "country": "ID",
+            "organisation_phone": "1111111",
+            "organisation_owners": self.user.id,
+            "project": self.project.id,
+        }
+        post_data.update(answers)
+        return post_data
+
     @override_settings(
         VALID_DOMAIN=[
             "testserver",
@@ -222,22 +242,28 @@ class TestCertifyingOrganisationView(TestCase):
         client = Client()
         client.login(username="anita", password="password")
         checklist = ChecklistF.create(
-            project=self.project, target=ORGANIZATION_OWNER, active=True
+            project=self.project,
+            target=ORGANIZATION_OWNER,
+            active=True,
+            show_text_box=True,
+            link_required=True,
         )
         org_slug = "org_name"
-        post_data = {
-            "name": org_slug,
-            "organisation_email": "org@test.com",
-            "address": "city",
-            "country": "ID",
-            "organisation_phone": "1111111",
-            "organisation_owners": self.user.id,
-            "project": self.project.id,
-            f"checklist-{checklist.id}": "yes",
-            f"textarea-{checklist.id}": "test",
-        }
+        post_data = self.application_post_data(
+            org_slug,
+            **{
+                f"checklist-{checklist.id}": "yes",
+                f"textarea-{checklist.id}": "https://qgis.org/x",
+            },
+        )
         response = client.post(reverse("certifyingorganisation-create"), post_data)
-        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(
+            response,
+            reverse(
+                "certifyingorganisation-application-outcome",
+                kwargs={"slug": org_slug},
+            ),
+        )
         self.assertTrue(
             OrganisationChecklist.objects.filter(
                 submitter=self.user, checklist=checklist, checked=True
@@ -247,6 +273,180 @@ class TestCertifyingOrganisationView(TestCase):
             f"/en/{self.project.slug}/certifyingorganisation/{org_slug}/",
             mail.outbox[0].body,
         )
+
+    @override_settings(
+        VALID_DOMAIN=[
+            "testserver",
+        ]
+    )
+    def test_create_view_post_without_links(self):
+        client = Client()
+        client.login(username="anita", password="password")
+        checklist = ChecklistF.create(
+            project=self.project,
+            target=ORGANIZATION_OWNER,
+            active=True,
+            show_text_box=True,
+            link_required=True,
+        )
+        post_data = self.application_post_data(
+            "org_without_links",
+            **{
+                f"checklist-{checklist.id}": "yes",
+                f"textarea-{checklist.id}": "We contributed a lot",
+            },
+        )
+        response = client.post(reverse("certifyingorganisation-create"), post_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            CertifyingOrganisation.objects.filter(name="org_without_links").exists()
+        )
+        self.assertIn(
+            b"Add at least one URL.",
+            response.content,
+        )
+        answer = response.context_data["available_checklist"][0]
+        self.assertEqual(answer["answer"], "yes")
+        self.assertEqual(answer["text"], "We contributed a lot")
+
+    @override_settings(
+        VALID_DOMAIN=[
+            "testserver",
+        ]
+    )
+    def test_create_view_post_with_no_evidence(self):
+        client = Client()
+        client.login(username="anita", password="password")
+        checklist = ChecklistF.create(
+            project=self.project,
+            target=ORGANIZATION_OWNER,
+            active=True,
+            show_text_box=True,
+            link_required=True,
+        )
+        post_data = self.application_post_data(
+            "org_with_no_evidence", **{f"checklist-{checklist.id}": "no"}
+        )
+        response = client.post(reverse("certifyingorganisation-create"), post_data)
+        self.assertRedirects(
+            response, reverse("certifyingorganisation-application-outcome")
+        )
+        self.assertFalse(
+            CertifyingOrganisation.objects.filter(
+                name="org_with_no_evidence"
+            ).exists()
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(
+        VALID_DOMAIN=[
+            "testserver",
+        ]
+    )
+    def test_create_view_post_with_a_link(self):
+        client = Client()
+        client.login(username="anita", password="password")
+        checklist = ChecklistF.create(
+            project=self.project,
+            target=ORGANIZATION_OWNER,
+            active=True,
+            show_text_box=True,
+            link_required=True,
+        )
+        details = "We rewrote the guide, see https://docs.qgis.org/x for it."
+        post_data = self.application_post_data(
+            "org_with_a_link",
+            **{
+                f"checklist-{checklist.id}": "yes",
+                f"textarea-{checklist.id}": details,
+            },
+        )
+        response = client.post(reverse("certifyingorganisation-create"), post_data)
+        self.assertRedirects(
+            response,
+            reverse(
+                "certifyingorganisation-application-outcome",
+                kwargs={"slug": "org_with_a_link"},
+            ),
+        )
+        answer = OrganisationChecklist.objects.get(
+            checklist=checklist,
+            organisation__name="org_with_a_link",
+        )
+        self.assertTrue(answer.checked)
+        self.assertEqual(answer.text_box_content, details)
+
+    @override_settings(
+        VALID_DOMAIN=[
+            "testserver",
+        ]
+    )
+    def test_create_view_renders_the_review_panel_hidden(self):
+        client = Client()
+        client.login(username="anita", password="password")
+        response = client.get(reverse("certifyingorganisation-create"))
+        self.assertContains(
+            response, 'id="application-review" class="is-hidden"'
+        )
+        self.assertContains(response, "Review your application")
+
+    @override_settings(
+        VALID_DOMAIN=[
+            "testserver",
+        ]
+    )
+    def test_outcome_view_without_a_slug_explains_the_refusal(self):
+        client = Client()
+        client.login(username="anita", password="password")
+        response = client.get(reverse("certifyingorganisation-application-outcome"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "There was no evidence of contributions")
+        self.assertContains(response, "certification@qgis.org")
+
+    @override_settings(
+        VALID_DOMAIN=[
+            "testserver",
+        ]
+    )
+    def test_outcome_view_shows_the_organisation_to_its_owner(self):
+        organisation = CertifyingOrganisationF.create(
+            name="owned organisation", project=self.project, approved=False
+        )
+        organisation.organisation_owners.set([self.simple_user])
+        client = Client()
+        client.login(username="user", password="password")
+        response = client.get(
+            reverse(
+                "certifyingorganisation-application-outcome",
+                kwargs={"slug": organisation.slug},
+            )
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "owned organisation")
+
+    @override_settings(
+        VALID_DOMAIN=[
+            "testserver",
+        ]
+    )
+    def test_outcome_view_refuses_a_stranger(self):
+        organisation = CertifyingOrganisationF.create(
+            name="someone elses organisation",
+            project=self.project,
+            approved=False,
+        )
+        stranger = UserF.create(username="stranger")
+        stranger.set_password("password")
+        stranger.save()
+        client = Client()
+        client.login(username="stranger", password="password")
+        response = client.get(
+            reverse(
+                "certifyingorganisation-application-outcome",
+                kwargs={"slug": organisation.slug},
+            )
+        )
+        self.assertEqual(response.status_code, 403)
 
     @override_settings(
         VALID_DOMAIN=[
