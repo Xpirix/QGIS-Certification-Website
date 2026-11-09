@@ -63,6 +63,31 @@ class Course(models.Model):
         default=datetime.date.today
     )
 
+    class Modality(models.TextChoices):
+        IN_PERSON = 'in_person', _('In person')
+        ONLINE = 'online', _('Online')
+        HYBRID = 'hybrid', _('Hybrid')
+
+    modality = models.CharField(
+        _('Modality'),
+        help_text=_(
+            'How people join this course. Hybrid means some join in person '
+            'and some join online.'),
+        max_length=20,
+        choices=Modality.choices,
+        blank=True,
+        default='',
+    )
+
+    is_open = models.BooleanField(
+        _('Open to external participants'),
+        help_text=_(
+            'Untick this if only your own students can join, for example a '
+            'university module. We then show the course only to your '
+            'organisation and the certification team.'),
+        default=True,
+    )
+
     slug = models.CharField(
         max_length=400,
         blank=True,
@@ -169,3 +194,11 @@ class Course(models.Model):
             for certificate in self.certificate_set.all()
             if not certificate.is_revocable
         )
+
+
+def listed_courses() -> models.QuerySet[Course]:
+    """Courses we may list on the home page and in the course feeds.
+
+    A course that is closed to external participants stays out of both.
+    """
+    return Course.objects.filter(is_open=True)

@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup as Soup
 from django.test import TestCase, override_settings
 from django.test.client import Client
 from django.urls import reverse
+from certification.models import Course
 from certification.tests.model_factories import (
     ProjectF,
     UserF,
@@ -139,6 +140,18 @@ class TestCourseView(TestCase):
                 self.assertTrue(course_attendee.editable)
             else:
                 self.assertFalse(course_attendee.editable)
+
+    @override_settings(VALID_DOMAIN=['testserver', ])
+    def test_detail_shows_the_modality(self) -> None:
+        url = reverse('course-detail', kwargs={
+            'organisation_slug': self.certifying_organisation.slug,
+            'slug': self.course.slug
+        })
+        self.assertContains(Client().get(url), 'Not set')
+
+        self.course.modality = Course.Modality.HYBRID
+        self.course.save()
+        self.assertContains(Client().get(url), 'Hybrid')
 
     @override_settings(VALID_DOMAIN=['testserver', ])
     def test_detail_with_duplicates(self):

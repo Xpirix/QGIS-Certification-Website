@@ -376,3 +376,49 @@ class TestCourseDeleteGuard(CoursePermissionTestBase):
 
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Course.objects.filter(pk=self.course.pk).exists())
+
+
+class TestClosedCourseVisibility(CoursePermissionTestBase):
+    """A closed course shows only to its organisation and the certification
+    team."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.course.is_open = False
+        self.course.save()
+        CourseConvenerF.create(
+            certifying_organisation=self.certifying_organisation,
+            user=self.make_user('other_convener'))
+
+    def course_detail_url(self) -> str:
+        return reverse('course-detail', kwargs={
+            'organisation_slug': self.certifying_organisation.slug,
+            'slug': self.course.slug,
+        })
+
+    def test_visitors_and_outsiders_cannot_open_a_closed_course(self) -> None:
+        response = self.client.get(self.course_detail_url())
+        self.assertEqual(response.status_code, 404)
+
+        self.login('outsider')
+        response = self.client.get(self.course_detail_url())
+        self.assertEqual(response.status_code, 404)
+
+    def test_organisation_and_staff_can_open_a_closed_course(self) -> None:
+        usernames = [
+            'owner', 'staff', self.convener_user.username, 'other_convener']
+        for username in usernames:
+            with self.subTest(username=username):
+                self.login(username)
+                response = self.client.get(self.course_detail_url())
+                self.assertEqual(response.status_code, 200)
+
+    def test_organisation_page_hides_a_closed_course_from_visitors(
+            self) -> None:
+        url = reverse('certifyingorganisation-detail', kwargs={
+            'slug': self.certifying_organisation.slug,
+        })
+        self.assertNotContains(self.client.get(url), self.course_detail_url())
+
+        self.login('owner')
+        self.assertContains(self.client.get(url), self.course_detail_url())

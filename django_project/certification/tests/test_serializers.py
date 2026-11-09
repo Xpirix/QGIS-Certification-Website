@@ -1,5 +1,6 @@
 from django.test import TestCase
 
+from certification.models import Course
 from certification.serializers.course_serializer import CourseSerializer
 from certification.tests.model_factories import (
     CourseF,
@@ -40,3 +41,34 @@ class TestSerializer(TestCase):
             serializer_data['course_type_name'],
             'test_course_type'
         )
+
+    def make_course(self, coursetype_link: str = '', **course_fields: str) -> Course:
+        certifying_organisation = CertifyingOrganisationF.create(
+            project=ProjectF.create())
+        return CourseF.create(
+            certifying_organisation=certifying_organisation,
+            training_center=TrainingCenterF.create(
+                certifying_organisation=certifying_organisation),
+            course_convener=CourseConvenerF.create(
+                certifying_organisation=certifying_organisation),
+            course_type=CourseTypeF.create(
+                certifying_organisation=certifying_organisation,
+                coursetype_link=coursetype_link),
+            **course_fields,
+        )
+
+    def test_course_type_link(self) -> None:
+        course = self.make_course(
+            coursetype_link='https://example.com/qgis-basics')
+        properties = CourseSerializer(course).data['properties']
+        self.assertEqual(
+            properties['course_type_link'], 'https://example.com/qgis-basics')
+
+    def test_course_type_link_is_null_without_a_link(self) -> None:
+        properties = CourseSerializer(self.make_course()).data['properties']
+        self.assertIsNone(properties['course_type_link'])
+
+    def test_modality(self) -> None:
+        course = self.make_course(modality=Course.Modality.ONLINE)
+        properties = CourseSerializer(course).data['properties']
+        self.assertEqual(properties['modality'], 'online')

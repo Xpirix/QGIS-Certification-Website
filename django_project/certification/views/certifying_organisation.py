@@ -7,6 +7,7 @@ from braces.views import LoginRequiredMixin, UserPassesTestMixin
 from certification.mixins import (
     ActiveCertifyingOrganisationRequiredMixin,
     ProtectedErrorMessageMixin,
+    courses_visible_to,
     user_can_manage_organisation,
 )
 from certification.utilities import check_slug, training_center_map_data
@@ -50,7 +51,6 @@ from ..models import (
     CertifyingOrganisation,
     CertifyingOrganisationCertificate,
     Checklist,
-    Course,
     CourseAttendee,
     CourseConvener,
     CourseType,
@@ -232,8 +232,8 @@ class CertifyingOrganisationDetailContextMixin:
                 certifying_organisation=certifying_organisation
             ).prefetch_related("course_set")
             context["num_courseconvener"] = context["courseconveners"].count()
-            context["courses"] = Course.objects.filter(
-                certifying_organisation=certifying_organisation
+            context["courses"] = courses_visible_to(
+                request.user, certifying_organisation
             ).order_by("-start_date")
             context["num_course"] = context["courses"].count()
             context["attendee"] = CourseAttendee.objects.filter(

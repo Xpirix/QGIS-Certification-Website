@@ -10,6 +10,7 @@ class CourseSerializer(GeoFeatureModelSerializer):
 
     location = GeometrySerializerMethodField()
     course_type_name = serializers.SerializerMethodField()
+    course_type_link = serializers.SerializerMethodField()
     course_convener_name = serializers.SerializerMethodField()
     training_center_name = serializers.SerializerMethodField()
     certifying_organisation_name = serializers.SerializerMethodField()
@@ -22,11 +23,13 @@ class CourseSerializer(GeoFeatureModelSerializer):
             'start_date',
             'end_date',
             'course_type_name',
+            'course_type_link',
             'course_convener_name',
             'training_center_name',
             'certifying_organisation_name',
             'language',
-            'trained_competence'
+            'trained_competence',
+            'modality',
         ]
 
     def get_location(self, obj):
@@ -34,6 +37,9 @@ class CourseSerializer(GeoFeatureModelSerializer):
 
     def get_course_type_name(self, obj):
         return obj.course_type.name
+
+    def get_course_type_link(self, obj: Course) -> str | None:
+        return obj.course_type.coursetype_link or None
 
     def get_course_convener_name(self, obj):
         return obj.course_convener.full_name

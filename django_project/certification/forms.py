@@ -485,6 +485,8 @@ class CourseForm(forms.ModelForm):
             'course_type',
             'course_convener',
             'training_center',
+            'modality',
+            'is_open',
             'language',
             'trained_competence',
             'start_date',
@@ -506,6 +508,8 @@ class CourseForm(forms.ModelForm):
                 Field('course_convener',
                       css_class='form-control chosen-select'),
                 Field('training_center', css_class='form-control'),
+                Field('modality', css_class='form-control'),
+                Field('is_open', css_class='checkbox-primary'),
                 Field('language', css_class='form-control'),
                 Field('trained_competence', css_class='form-control'),
                 Field('start_date', css_class='form-control'),
@@ -517,6 +521,7 @@ class CourseForm(forms.ModelForm):
         self.helper.layout = layout
         self.helper.html5_required = False
         super(CourseForm, self).__init__(*args, **kwargs)
+        self.fields['modality'].required = True
         self.fields['course_convener'].queryset = \
             CourseConvener.objects.filter(
                 certifying_organisation=self.certifying_organisation,

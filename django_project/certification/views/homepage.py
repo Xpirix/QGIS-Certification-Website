@@ -4,7 +4,7 @@ from certification.views.certifying_organisation import CertifyingOrganisationLi
 from certification.utilities import world_map_data
 from django.utils.timezone import now
 from datetime import timedelta
-from certification.models.course import Course
+from certification.models.course import Course, listed_courses
 from django.views.generic import ListView
 
 
@@ -15,7 +15,7 @@ class UpcomingCourseListView(ListView):
     def get_queryset(self):
         """Return courses with start_date in the future and within the next 6 months."""
         three_months_from_now = now() + timedelta(days=180)
-        return Course.objects.filter(
+        return listed_courses().filter(
             start_date__gte=now(),
             start_date__lte=three_months_from_now
         ).order_by('start_date')

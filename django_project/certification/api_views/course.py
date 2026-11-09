@@ -8,7 +8,7 @@ from rest_framework.views import APIView, Response
 
 from ..mixins import ActiveCertifyingOrganisationRequiredMixin
 from ..models.certifying_organisation import CertifyingOrganisation
-from ..models.course import Course
+from ..models.course import Course, listed_courses
 from ..serializers.course_serializer import CourseSerializer
 
 
@@ -29,7 +29,7 @@ class GetUpcomingCourseProject(APIView):
         try:
             today = datetime.today()
             project = Project.objects.get(slug="qgis")
-            courses = Course.objects.filter(
+            courses = listed_courses().filter(
                 certifying_organisation__project=project, start_date__gte=today
             )
             if country_param:
@@ -75,7 +75,7 @@ class GetUpcomingCourseOrganisation(ActiveCertifyingOrganisationRequiredMixin, A
             )
 
         try:
-            courses = Course.objects.filter(
+            courses = listed_courses().filter(
                 certifying_organisation=organisation, start_date__gte=today
             ).order_by("start_date")
             serializer = CourseSerializer(courses, many=True)
@@ -97,7 +97,7 @@ class GetPastCourseProject(APIView):
         try:
             today = datetime.today()
             project = Project.objects.get(slug="qgis")
-            courses = Course.objects.filter(
+            courses = listed_courses().filter(
                 certifying_organisation__project=project, end_date__lte=today
             ).order_by("certifying_organisation__name", "start_date")
             serializer = CourseSerializer(courses, many=True)
@@ -134,7 +134,7 @@ class GetPastCourseOrganisation(ActiveCertifyingOrganisationRequiredMixin, APIVi
             )
 
         try:
-            courses = Course.objects.filter(
+            courses = listed_courses().filter(
                 certifying_organisation=organisation, end_date__lte=today
             ).order_by("start_date")
             serializer = CourseSerializer(courses, many=True)
