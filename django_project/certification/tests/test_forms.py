@@ -160,6 +160,7 @@ class TestCourseForm(TestCase):
         self.assertEqual(course.modality, 'online')
         self.assertFalse(course.is_open)
 
+
 class TestCertifyingOrganisationChecklist(TestCase):
     """The applicant checklist is answered in full, with links where asked."""
 
