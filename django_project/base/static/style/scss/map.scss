@@ -120,6 +120,17 @@ $map-popup-z: 10010;
   }
 }
 
+.map-container--location {
+  .map-flat-view {
+    height: clamp(300px, 55vh, 480px);
+    cursor: crosshair;
+  }
+
+  .map-marker {
+    pointer-events: none;
+  }
+}
+
 .map-status {
   position: absolute;
   top: 50%;

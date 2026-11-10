@@ -1,12 +1,14 @@
 import 'ol/ol.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
+import {initLocationPicker} from './location';
 import {initSiteMap} from './sites';
 import {initWorldMap} from './world';
 
 const MAPS = {
   world: initWorldMap,
   site: initSiteMap,
+  location: initLocationPicker,
 };
 
 /**

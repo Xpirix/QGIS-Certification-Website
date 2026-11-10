@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 import json
 import os
+from typing import Any
 from django import forms
 from django.conf import settings
 from django.contrib.gis.geos import Point
@@ -10,7 +11,6 @@ from django.contrib.gis import forms as geoforms
 from django.contrib.gis import gdal
 from django.contrib.gis.forms.widgets import BaseGeometryWidget
 from django.core.exceptions import ValidationError
-from django.contrib.gis.forms.widgets import OSMWidget
 from django.db.models import QuerySet
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import (
@@ -393,16 +393,39 @@ class CustomOSMWidget(BaseGeometryWidget):
             return 4326
 
 
+class LocationWidget(BaseGeometryWidget):
+    """Pick a point on the same Equal Earth map as the other maps.
+
+    Set ``country`` and ``logo`` in ``attrs`` to frame the organisation's
+    country and mark the point with its logo.
+    """
+
+    template_name = 'widgets/location.html'
+    map_srid = 4326
+
+    def get_context(
+        self, name: str, value: Any, attrs: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        context = super().get_context(name, value, attrs)
+        context['map_data_id'] = f"{context['id']}-map-data"
+        context['map_data'] = {
+            'input': context['id'],
+            'country': context.get('country', ''),
+            'logo': context.get('logo'),
+        }
+        return context
+
+
 class TrainingCenterForm(geoforms.ModelForm):
 
-    location = geoforms.PointField(widget=OSMWidget(
-        attrs={
-            'map_width': 750,
-            'map_height': 400,
-            'default_zoom': 5,
-            'default_lat': -30.559482,
-            'default_lon': 22.937506
-        }), required=False)
+    location = geoforms.PointField(
+        widget=LocationWidget(),
+        required=False,
+        help_text=(
+            'Click the map where your training centre is. '
+            'Click again to move the marker.'
+        ),
+    )
 
     class Meta:
         model = TrainingCenter
@@ -446,6 +469,11 @@ class TrainingCenterForm(geoforms.ModelForm):
                         lon = data['properties']['LON']
         point = Point(x=lon, y=lat, srid=4326)
         self.fields['location'].initial = point
+        organisation = self.certifying_organisation
+        self.fields['location'].widget.attrs.update({
+            'country': organisation.country.code,
+            'logo': organisation.logo.url if organisation.logo else None,
+        })
         self.helper.layout.append(
             HTML(
                 '<button type="submit" class="button is-success mt-5" name="submit">'

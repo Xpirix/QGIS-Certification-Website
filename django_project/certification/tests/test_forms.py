@@ -1,3 +1,4 @@
+from django.contrib.gis.geos import Point
 from django.test import TestCase
 
 from base.tests.model_factories import ProjectF
@@ -10,7 +11,8 @@ from certification.models import (
 )
 from core.model_factories import UserF
 from certification.forms import (
-    CertifyingOrganisationForm, CourseConvenerForm, CourseForm
+    CertifyingOrganisationForm, CourseConvenerForm, CourseForm,
+    TrainingCenterForm
 )
 
 
@@ -343,3 +345,55 @@ class TestCertifyingOrganisationChecklist(TestCase):
             questions=self.questions()
         )
         self.assertTrue(form.is_valid())
+
+
+class TestTrainingCenterForm(TestCase):
+    """The location picker gets the map data and saves the picked point."""
+
+    def setUp(self) -> None:
+        self.user = UserF.create()
+        self.organisation = CertifyingOrganisationF.create(
+            project=ProjectF.create(), country='MG')
+
+    def form(self, **kwargs: object) -> TrainingCenterForm:
+        return TrainingCenterForm(
+            user=self.user,
+            certifying_organisation=self.organisation,
+            **kwargs,
+        )
+
+    def details(self, location: str) -> dict[str, str]:
+        return {
+            'name': 'Antananarivo centre',
+            'email': 'centre@example.org',
+            'address': 'Lot 1, Antananarivo',
+            'phone': '+261200000000',
+            'location': location,
+        }
+
+    def test_picker_frames_the_organisation_country(self) -> None:
+        html = str(self.form()['location'])
+        self.assertIn('data-map="location"', html)
+        self.assertIn('"input": "id_location"', html)
+        self.assertIn('"country": "MG"', html)
+
+    def test_picker_shows_the_saved_location(self) -> None:
+        center = TrainingCenterF.create(
+            certifying_organisation=self.organisation,
+            location=Point(x=47.5, y=-18.5, srid=4326),
+        )
+        html = str(self.form(instance=center)['location'])
+        self.assertIn('value="POINT (47.5 -18.5)"', html)
+
+    def test_picked_point_is_saved_in_longitude_and_latitude(self) -> None:
+        form = self.form(data=self.details('POINT(47.5 -18.9)'))
+        self.assertTrue(form.is_valid(), form.errors)
+        center = form.save()
+        center.refresh_from_db()
+        self.assertEqual(center.location.srid, 4326)
+        self.assertEqual((center.location.x, center.location.y), (47.5, -18.9))
+
+    def test_removed_location_saves_none(self) -> None:
+        form = self.form(data=self.details(''))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertIsNone(form.save().location)
