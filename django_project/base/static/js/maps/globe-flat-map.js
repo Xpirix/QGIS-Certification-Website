@@ -1,25 +1,11 @@
 import maplibregl from 'maplibre-gl';
-import Feature from 'ol/Feature';
-import Map from 'ol/Map';
 import Overlay from 'ol/Overlay';
-import View from 'ol/View';
-import {defaults as defaultControls} from 'ol/control/defaults';
-import Polygon from 'ol/geom/Polygon';
-import TileLayer from 'ol/layer/Tile';
-import VectorLayer from 'ol/layer/Vector';
 import {fromLonLat} from 'ol/proj';
-import {getVectorContext} from 'ol/render';
-import OSM from 'ol/source/OSM';
-import VectorSource from 'ol/source/Vector';
-import Fill from 'ol/style/Fill';
-import Stroke from 'ol/style/Stroke';
-import Style from 'ol/style/Style';
 
+import {createFlatMap} from './flat-map';
 import {MapModal} from './modal';
 import {equalEarth} from './projection';
 
-const OCEAN = '#aad3df';
-const OCEAN_LINE = '#8fb8c4';
 const OSM_ATTRIBUTION =
   '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const REDUCE_MOTION = window.matchMedia(
@@ -210,54 +196,7 @@ export class GlobeFlatMap {
   }
 
   initFlat() {
-    const projection = this.flatProjection;
-    const extent = projection.getExtent();
-    const view = new View({
-      projection,
-      center: fromLonLat([0, 20], projection),
-      extent,
-      constrainOnlyCenter: true,
-      showFullExtent: true,
-      enableRotation: false,
-    });
-
-    const outline = this.worldOutline();
-    const tiles = new TileLayer({
-      source: new OSM({
-        tileLoadFunction: (tile, src) => {
-          const image = tile.getImage();
-          image.referrerPolicy = 'origin';
-          image.src = src;
-        },
-      }),
-    });
-    // Reprojected tiles stop at 85 degrees and come out jagged, so clip them to the world outline.
-    const mask = new Style({fill: new Fill({color: 'black'})});
-    tiles.on('postrender', (event) => {
-      const context = event.context;
-      context.globalCompositeOperation = 'destination-in';
-      getVectorContext(event).drawFeature(outline, mask);
-      context.globalCompositeOperation = 'source-over';
-    });
-
-    this.flatMap = new Map({
-      target: this.flatElement,
-      controls: defaultControls({rotate: false}),
-      layers: [
-        new VectorLayer({
-          source: new VectorSource({features: [outline]}),
-          style: new Style({
-            fill: new Fill({color: OCEAN}),
-            stroke: new Stroke({color: OCEAN_LINE, width: 1}),
-          }),
-        }),
-        tiles,
-      ],
-      view,
-    });
-    view.fit(extent, {padding: [8, 8, 8, 8]});
-    view.setMinZoom(view.getZoom());
-
+    this.flatMap = createFlatMap(this.flatElement, this.flatProjection);
     this.flatMap.on('singleclick', (event) => {
       if (!event.originalEvent.target.closest('.map-marker')) {
         this.onFlatClick(event);
@@ -267,22 +206,6 @@ export class GlobeFlatMap {
     this.onFlatLoad();
     this.fitFlat();
     this.restoreSelection();
-  }
-
-  /**
-   * @returns {Feature} The edge of the Equal Earth world, meridians 180 east and west.
-   */
-  worldOutline() {
-    const ring = [];
-    for (let lat = -90; lat <= 90; lat += 1) {
-      ring.push([180, lat]);
-    }
-    for (let lat = 90; lat >= -90; lat -= 1) {
-      ring.push([-180, lat]);
-    }
-    return new Feature(
-      new Polygon([ring.map((lonLat) => fromLonLat(lonLat, this.flatProjection))]),
-    );
   }
 
   /**
