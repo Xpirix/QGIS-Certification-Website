@@ -221,7 +221,7 @@ def generate_certificate_pdf(
     page.drawString(
         margin_left,
         (margin_bottom - 20),
-        "You can verify this certificate by visiting "
+        "You can verify this certificate by scanning the QR Code or visiting "
         "https://{}/en/organisationcertificate/{}/.".format(
             current_site, certificate.certificateID
         ),
