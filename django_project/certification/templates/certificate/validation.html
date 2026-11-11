@@ -8,15 +8,29 @@
 
     <div class="container has-text-centered">
         <h1 class="title">Validate Certificate</h1>
-        <h4 class="subtitle">Input your certificate ID here:</h4>
+        <h4 class="subtitle">Enter the certificate ID, verification code, or link from the certificate:</h4>
     </div>
 
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
     <script type="text/javascript">
-        $(function() {
-            $("#submit-button").on("click", function() {
-                var query = $("#InputID").val();
-                location.href = '/en/certificate/' + query + '/';
+        document.addEventListener('DOMContentLoaded', function () {
+            var input = document.getElementById('InputID');
+            var codePattern = /\b[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}\b/i;
+
+            function search() {
+                var query = input.value.trim();
+                if (!query) {
+                    return;
+                }
+                var match = query.match(codePattern);
+                var key = match ? match[0].toUpperCase() : query;
+                location.href = '/en/certificate/' + encodeURIComponent(key) + '/';
+            }
+
+            document.getElementById('submit-button').addEventListener('click', search);
+            input.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    search();
+                }
             });
         });
     </script>

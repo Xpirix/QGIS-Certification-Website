@@ -123,6 +123,18 @@ class UpdatePaidStatusPermissionTest(TestCase):
         self.certificate.refresh_from_db()
         self.assertTrue(self.certificate.is_paid)
 
+    def test_paying_an_old_certificate_gives_it_a_verification_code(self) -> None:
+        """Certificates created before verification codes existed have none."""
+
+        Certificate.objects.filter(pk=self.certificate.pk).update(
+            verification_code=None)
+        self.login('owner')
+        self.client.post(self.paid_status_url())
+
+        self.certificate.refresh_from_db()
+        self.assertTrue(self.certificate.is_paid)
+        self.assertIsNotNone(self.certificate.verification_code)
+
     def test_staff_may_mark_paid(self) -> None:
         self.login('staff')
         response = self.client.post(self.paid_status_url())
