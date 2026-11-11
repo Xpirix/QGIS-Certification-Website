@@ -71,6 +71,7 @@ from .views import (  # Certifying Organisation.; Course Type.; Course Convener.
     ValidateCertificate,
     ValidateCertificateOrganisation,
     certificate_pdf_view,
+    certificate_uuid_pdf_view,
     docs_approval_cert_org,
     docs_cert_manager,
     docs_course_conveners,
@@ -342,6 +343,12 @@ urlpatterns = [
         r"^certificate/(?P<id>[\w-]+)/$",
         view=CertificateDetailView.as_view(),
         name="certificate-details",
+    ),
+    url(
+        r"^certificate/(?P<uuid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+        r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/pdf/$",
+        certificate_uuid_pdf_view,
+        name="certificate-pdf",
     ),
     url(
         r"^certifyingorganisation/(?P<organisation_slug>[\w-]+)/course/(?P<course_slug>[\w-]+)/print/(?P<pk>[\w-]+)/$",

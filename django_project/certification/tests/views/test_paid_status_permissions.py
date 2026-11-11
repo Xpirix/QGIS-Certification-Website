@@ -123,6 +123,17 @@ class UpdatePaidStatusPermissionTest(TestCase):
         self.certificate.refresh_from_db()
         self.assertTrue(self.certificate.is_paid)
 
+    def test_paying_an_old_certificate_gives_it_a_uuid(self) -> None:
+        """Certificates created before uuid links existed have none yet."""
+
+        Certificate.objects.filter(pk=self.certificate.pk).update(uuid=None)
+        self.login('owner')
+        self.client.post(self.paid_status_url())
+
+        self.certificate.refresh_from_db()
+        self.assertTrue(self.certificate.is_paid)
+        self.assertIsNotNone(self.certificate.uuid)
+
     def test_staff_may_mark_paid(self) -> None:
         self.login('staff')
         response = self.client.post(self.paid_status_url())
