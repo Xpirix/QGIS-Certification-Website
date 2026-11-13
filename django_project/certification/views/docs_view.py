@@ -142,3 +142,13 @@ def docs_getting_help(request):
     "docs/getting_help.html",
     {},
   )
+
+def docs_faq(request):
+  """
+  Renders the FAQ page
+  """
+  return render(
+    request,
+    "docs/faq.html",
+    {},
+  )

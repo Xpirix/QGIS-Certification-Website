@@ -84,6 +84,7 @@ from .views import (  # Certifying Organisation.; Course Type.; Course Convener.
     docs_payments,
     docs_register_cert_org,
     docs_training_centers,
+    docs_faq,
     download_certificates_zip,
     email_all_attendees,
     generate_all_certificate,
@@ -513,4 +514,5 @@ urlpatterns = [
         name="docs-issuing-certificates",
     ),
     url(r"^docs/getting-help/$", view=docs_getting_help, name="docs-getting-help"),
+    url(r"^docs/faq/$", view=docs_faq, name="docs-faq"),
 ]
