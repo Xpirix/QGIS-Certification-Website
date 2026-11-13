@@ -371,3 +371,12 @@ a.is-active > span {
 .rounded .rich-right img {
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
 }
+
+.button[disabled][data-tooltip] {
+  cursor: not-allowed;
+  opacity: 1;
+
+  > * {
+    opacity: $button-disabled-opacity;
+  }
+}
