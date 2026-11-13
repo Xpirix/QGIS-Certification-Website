@@ -279,7 +279,7 @@
                                             </span>
                                         </a>
                                         {% else %}
-                                        <a class="button is-small is-light has-tooltip-multiline has-tooltip-arrow has-tooltip-bottom" data-tooltip="Edit attendee is only available 7 days after the certificate is issued." disabled href='#'>
+                                        <a class="button is-small is-light has-tooltip-multiline has-tooltip-arrow has-tooltip-bottom" data-tooltip="You can edit an attendee for {{ revocation_window_days }} days after their certificate is issued." disabled href='#'>
                                             <span class="icon is-small">
                                                 <i class="fas fa-pencil-alt"></i>
                                             </span>
@@ -295,7 +295,7 @@
                                             </span>
                                         </a>
                                         {% else %}
-                                        <a class="button is-small is-light has-tooltip-multiline has-tooltip-arrow has-tooltip-bottom" data-tooltip="Certificates can only be revoked within 7 days of being issued. This one is now a permanent record." href="#" disabled>
+                                        <a class="button is-small is-light has-tooltip-multiline has-tooltip-arrow has-tooltip-bottom" data-tooltip="You can revoke a certificate for {{ revocation_window_days }} days after it is issued. This one is now a permanent record." href="#" disabled>
                                             <span class="icon is-small">
                                                 <i class="fas fa-exclamation-triangle"></i>
                                             </span>

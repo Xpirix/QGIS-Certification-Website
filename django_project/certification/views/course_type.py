@@ -15,7 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 
 from ..forms import CourseTypeForm
-from ..models import CertifyingOrganisation, CourseType
+from ..models import Certificate, CertifyingOrganisation, CourseType
 
 
 class CourseTypeMixin(object):
@@ -142,6 +142,7 @@ class CourseTypeDeleteView(
         context = super(CourseTypeDeleteView, self).get_context_data(**kwargs)
         if getattr(self, "object", None) is not None:
             context["blocked_course_count"] = self.get_blocked_course_count()
+        context["revocation_window_days"] = Certificate.REVOCATION_WINDOW_DAYS
         return context
 
     def get_blocked_message(

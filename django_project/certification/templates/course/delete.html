@@ -17,7 +17,7 @@
                 <p><strong>This course cannot be deleted.</strong></p>
                 <p>
                     It holds {{ permanent_certificate_count }} certificate{{ permanent_certificate_count|pluralize }}
-                    that can no longer be revoked, because the 7 day
+                    that can no longer be revoked, because the {{ revocation_window_days }} day
                     revocation window has closed. Those certificates are a
                     permanent record, so the course has to be kept.
                 </p>

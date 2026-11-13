@@ -1364,7 +1364,7 @@ class CertificateRevokeView(
             CertificateRevokeView, self).post(request, *args, **kwargs)
 
     def dispatch(self, request, *args, **kwargs):
-        """Refuse revocation once the certificate's 7 day window has closed.
+        """Refuse revocation once the certificate's window has closed.
 
         This is checked here rather than in get(), so that it covers POST as
         well: enforcing it on GET alone left the window bypassable by posting

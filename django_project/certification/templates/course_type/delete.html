@@ -18,7 +18,7 @@
                 <p>
                     {{ blocked_course_count }} of its course{{ blocked_course_count|pluralize }}
                     hold{{ blocked_course_count|pluralize:"s," }} certificates
-                    that can no longer be revoked, because the 7 day
+                    that can no longer be revoked, because the {{ revocation_window_days }} day
                     revocation window has closed. Those courses are a
                     permanent record and cannot be deleted, so neither can
                     this course type.

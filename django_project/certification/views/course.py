@@ -319,6 +319,7 @@ class CourseDeleteView(
             context["permanent_certificate_count"] = (
                 self.object.permanent_certificate_count
             )
+        context["revocation_window_days"] = Certificate.REVOCATION_WINDOW_DAYS
         return context
 
     def get_blocked_message(
@@ -568,6 +569,7 @@ class CourseDetailView(
         context["paid_certificates"] = Certificate.objects.filter(
             course=self.course, is_paid=True
         ).values_list("attendee", flat=True)
+        context["revocation_window_days"] = Certificate.REVOCATION_WINDOW_DAYS
         project_slug = "qgis"
         context["project_slug"] = project_slug
         if project_slug:
