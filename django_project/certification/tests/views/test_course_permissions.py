@@ -253,6 +253,7 @@ class TestCourseTypeDeleteGuard(CoursePermissionTestBase):
 
         self.assertContains(response, 'This course type cannot be deleted.')
         self.assertContains(response, 'can no longer be revoked')
+        self.assertContains(response, 'because the 30 day')
         self.assertNotContains(response, 'cannot be deleted yet')
 
     def test_message_says_not_yet_when_courses_are_still_removable(
@@ -345,6 +346,7 @@ class TestCourseDeleteGuard(CoursePermissionTestBase):
 
         self.assertContains(response, 'This course cannot be deleted.')
         self.assertContains(response, 'can no longer be revoked')
+        self.assertContains(response, 'because the 30 day')
         self.assertNotContains(response, 'cannot be deleted yet')
 
     def test_message_says_not_yet_when_all_certificates_are_revocable(

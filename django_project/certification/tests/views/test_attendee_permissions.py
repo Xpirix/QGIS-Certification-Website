@@ -13,10 +13,13 @@ another organisation's attendee into the attacker's own.
 
 import io
 import logging
+from datetime import date, timedelta
 
-from certification.models import Attendee
+from certification.models import Attendee, Certificate
 from certification.tests.model_factories import (
     AttendeeF,
+    CertificateF,
+    CertificateTypeF,
     CertifyingOrganisationF,
     CourseAttendeeF,
     CourseConvenerF,
@@ -111,6 +114,20 @@ class AttendeePermissionTest(TestCase):
         return SimpleUploadedFile(
             name, body.encode('utf-8'), content_type='text/csv')
 
+    def issue_certificate(self, issued_days_ago: int) -> None:
+        """Give the victim attendee a back-dated certificate.
+
+        issue_date is auto_now_add, so it has to be written with update().
+        """
+
+        certificate = CertificateF.create(
+            course=self.victim_course,
+            attendee=self.victim_attendee,
+            certificate_type=CertificateTypeF.create(),
+        )
+        Certificate.objects.filter(pk=certificate.pk).update(
+            issue_date=date.today() - timedelta(days=issued_days_ago))
+
     # ------------------------------------------------------------------
     # AttendeeUpdateView
     # ------------------------------------------------------------------
@@ -180,6 +197,43 @@ class AttendeePermissionTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self.victim_attendee.refresh_from_db()
         self.assertEqual(self.victim_attendee.firstname, 'Updated')
+
+    def test_owner_can_correct_a_name_20_days_after_issue(self) -> None:
+        """Issue #125: names on certificates printed before a course."""
+
+        self.issue_certificate(issued_days_ago=20)
+        self.login('victimowner')
+        response = self.client.post(
+            self.update_url(
+                self.victim_organisation, self.victim_course,
+                self.victim_attendee),
+            data={
+                'firstname': 'Corrected',
+                'surname': 'Person',
+                'email': 'real.person@example.com',
+            })
+
+        self.assertEqual(response.status_code, 302)
+        self.victim_attendee.refresh_from_db()
+        self.assertEqual(self.victim_attendee.firstname, 'Corrected')
+
+    def test_name_is_frozen_30_days_after_issue(self) -> None:
+        self.issue_certificate(issued_days_ago=30)
+        self.login('victimowner')
+        url = self.update_url(
+            self.victim_organisation, self.victim_course,
+            self.victim_attendee)
+
+        self.assertEqual(self.client.get(url).status_code, 403)
+        response = self.client.post(url, data={
+            'firstname': 'Corrected',
+            'surname': 'Person',
+            'email': 'real.person@example.com',
+        })
+
+        self.assertEqual(response.status_code, 403)
+        self.victim_attendee.refresh_from_db()
+        self.assertEqual(self.victim_attendee.firstname, 'Real')
 
     def test_update_cannot_move_attendee_to_another_organisation(self) -> None:
         """The hidden field was never a constraint."""

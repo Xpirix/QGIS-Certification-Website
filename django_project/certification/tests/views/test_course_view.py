@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup as Soup
 from django.test import TestCase, override_settings
 from django.test.client import Client
 from django.urls import reverse
-from certification.models import Course
+from certification.models import Certificate, Course
 from certification.tests.model_factories import (
     ProjectF,
     UserF,
@@ -126,7 +126,8 @@ class TestCourseView(TestCase):
             course=self.course,
             certificate_type=self.certificate_type
         )
-        cert.issue_date = datetime.datetime.now() - datetime.timedelta(days=7)
+        cert.issue_date = datetime.datetime.now() - datetime.timedelta(
+            days=Certificate.REVOCATION_WINDOW_DAYS)
         cert.save()
 
         response = client.get(reverse('course-detail', kwargs={
@@ -140,6 +141,34 @@ class TestCourseView(TestCase):
                 self.assertTrue(course_attendee.editable)
             else:
                 self.assertFalse(course_attendee.editable)
+
+    @override_settings(VALID_DOMAIN=['testserver', ])
+    def test_detail_explains_why_a_certificate_is_locked(self) -> None:
+        self.client.login(username='anita', password='password')
+        attendee = AttendeeF.create(
+            certifying_organisation=self.certifying_organisation)
+        CourseAttendeeF.create(attendee=attendee, course=self.course)
+        certificate = CertificateF.create(
+            attendee=attendee,
+            course=self.course,
+            certificate_type=self.certificate_type,
+            is_paid=True,
+        )
+        Certificate.objects.filter(pk=certificate.pk).update(
+            issue_date=datetime.date.today() - datetime.timedelta(days=30))
+
+        response = self.client.get(reverse('course-detail', kwargs={
+            'organisation_slug': self.certifying_organisation.slug,
+            'slug': self.course.slug
+        }))
+
+        self.assertContains(
+            response,
+            'You can edit an attendee for 30 days after their certificate '
+            'is issued.')
+        self.assertContains(
+            response,
+            'You can revoke a certificate for 30 days after it is issued.')
 
     @override_settings(VALID_DOMAIN=['testserver', ])
     def test_detail_shows_the_modality(self) -> None:

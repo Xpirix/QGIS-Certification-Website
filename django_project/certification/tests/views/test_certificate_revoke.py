@@ -1,5 +1,5 @@
 # coding=utf-8
-"""Tests for revoking a certificate: the 7 day window and the credit refund."""
+"""Tests for revoking a certificate: the time window and the credit refund."""
 
 import datetime
 import logging
@@ -103,6 +103,26 @@ class TestRevokeWindow(CertificateRevokeTestBase):
 
         self.assertEqual(response.status_code, 302)
         self.assertFalse(
+            Certificate.objects.filter(pk=self.certificate.pk).exists())
+
+    def test_revoke_allowed_on_day_29(self) -> None:
+        """Issue #125: certificates printed before a course need a month."""
+
+        self.set_issue_date(days_ago=29)
+        self.client.login(username='staff', password='password')
+
+        self.client.post(self.revoke_url())
+
+        self.assertFalse(
+            Certificate.objects.filter(pk=self.certificate.pk).exists())
+
+    def test_post_is_refused_on_day_30(self) -> None:
+        self.set_issue_date(days_ago=30)
+        self.client.login(username='staff', password='password')
+
+        self.client.post(self.revoke_url())
+
+        self.assertTrue(
             Certificate.objects.filter(pk=self.certificate.pk).exists())
 
     def test_post_is_refused_outside_window(self) -> None:
