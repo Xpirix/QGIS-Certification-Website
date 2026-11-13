@@ -102,7 +102,7 @@ class Certificate(models.Model):
         })
 
     #: Days after issue during which a certificate may still be revoked.
-    REVOCATION_WINDOW_DAYS = 7
+    REVOCATION_WINDOW_DAYS = 30
 
     @property
     def is_revocable(self) -> bool:
