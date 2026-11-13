@@ -143,6 +143,7 @@ def docs_getting_help(request):
     {},
   )
 
+
 def docs_faq(request):
   """
   Renders the FAQ page
