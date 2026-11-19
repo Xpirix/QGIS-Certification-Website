@@ -55,7 +55,7 @@ def group_verification_code(characters: str) -> str:
     :rtype: str
     """
 
-    return "-".join(characters[i : i + 4] for i in range(0, len(characters), 4))
+    return "-".join(characters[i: i + 4] for i in range(0, len(characters), 4))
 
 
 def generate_verification_code() -> str:
